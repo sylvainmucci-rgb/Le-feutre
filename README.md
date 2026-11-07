@@ -27,7 +27,7 @@ npm start
 
 ## Ce qui se joue
 
-Deux jeux seulement. Omaha, Stud, Draw, Coinche, Tarot et Manille ne sont pas implémentés.
+Hold'em no-limit, Omaha pot-limit, stud, poker fermé, belote, coinche couleur, tarot, manille muette, écarté et bataille corse. Les dollars de poker sont fictifs. Trois recaves au montant initial, puis élimination.
 
 ### Texas Hold'em
 

@@ -4,35 +4,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { WebSocketServer, type WebSocket } from "ws";
 import { collectCards, sameCard, type Card } from "../shared/cards";
+import { moduleFor, type AnyEngine } from "../shared/catalog";
 import { CHAT_HISTORY, pushChat, type ChatMessage } from "../shared/chat";
 import { isGameId, type GameId } from "../shared/games";
 import { mulberry32, type Rng } from "../shared/rng";
-import { chooseBeloteAction } from "../shared/belote/bot";
-import {
-  applyBelote,
-  beloteActor,
-  continueBelote,
-  createBelote,
-  hiddenBeloteCards,
-  projectBelote,
-  type BeloteAction,
-  type BeloteState,
-  type BeloteView,
-} from "../shared/belote/engine";
-import { choosePokerAction } from "../shared/poker/bot";
-import {
-  actorId,
-  applyPoker,
-  continueHoldem,
-  createMatch,
-  hiddenHoldemCards,
-  projectHoldem,
-  stakesForBuyIn,
-  type HoldemBuyIn,
-  type HoldemState,
-  type HoldemView,
-  type PokerAction,
-} from "../shared/poker/holdem";
+import { stakesForBuyIn, type HoldemBuyIn } from "../shared/poker/holdem";
 
 export type TableView = {
   code: string;
@@ -50,7 +26,7 @@ export type TableView = {
     isHost: boolean;
   }[];
   chat: ChatMessage[];
-  engine: HoldemView | BeloteView | null;
+  engine: unknown;
 };
 
 type Seat = {
@@ -68,7 +44,7 @@ type Table = {
   game: GameId;
   hostId: string;
   players: Seat[];
-  engine: HoldemState | BeloteState | null;
+  engine: AnyEngine | null;
   chat: ChatMessage[];
   rng: Rng;
   target: number;
@@ -89,7 +65,7 @@ type ClientMsg = {
   code?: string;
   token?: string;
   playerId?: string;
-  action?: PokerAction | BeloteAction;
+  action?: object;
   text?: string;
   stack?: number;
 };
@@ -122,7 +98,8 @@ function cleanNick(input: unknown): string {
 }
 
 function limits(game: GameId): { min: number; max: number } {
-  return game === "belote" ? { min: 4, max: 4 } : { min: 2, max: 8 };
+  const rule = moduleFor(game);
+  return { min: rule.min, max: rule.max };
 }
 
 function touch(table: Table) {
@@ -143,13 +120,11 @@ function assertHidden(view: unknown, hidden: Card[]) {
 }
 
 export function viewFor(table: Table, playerId: string): TableView {
-  let engine: HoldemView | BeloteView | null = null;
-  if (table.engine?.kind === "texas-holdem") {
-    engine = projectHoldem(table.engine, playerId);
-    assertHidden(engine, hiddenHoldemCards(table.engine, playerId));
-  } else if (table.engine?.kind === "belote") {
-    engine = projectBelote(table.engine, playerId);
-    assertHidden(engine, hiddenBeloteCards(table.engine, playerId));
+  let engine: unknown = null;
+  if (table.engine) {
+    const rule = moduleFor(table.engine.kind);
+    engine = rule.project(table.engine, playerId);
+    assertHidden(engine, rule.hidden(table.engine, playerId));
   }
   return {
     code: table.code,
@@ -187,7 +162,7 @@ function emit(table: Table) {
 
 function actor(table: Table): string | null {
   if (!table.engine) return null;
-  return table.engine.kind === "texas-holdem" ? actorId(table.engine) : beloteActor(table.engine);
+  return moduleFor(table.engine.kind).actor(table.engine);
 }
 
 function clearBot(table: Table) {
@@ -200,27 +175,25 @@ function clearContinue(table: Table) {
   table.continueTimer = undefined;
 }
 
-function decide(table: Table, playerId: string): PokerAction | BeloteAction {
-  if (table.engine?.kind === "texas-holdem") {
-    const view = projectHoldem(table.engine, playerId);
-    const action = choosePokerAction(view);
-    if (action.type === "check" && !view.you.legal?.check && view.you.legal?.call !== null) {
+function decide(table: Table, playerId: string): object {
+  if (!table.engine) throw new Error("Aucune partie.");
+  const rule = moduleFor(table.engine.kind);
+  const view = rule.project(table.engine, playerId);
+  const action = rule.bot(view as never);
+  if (table.engine.kind === "texas-holdem" || table.engine.kind === "omaha" || table.engine.kind === "stud" || table.engine.kind === "draw") {
+    const legal = (view as { you?: { legal?: { check?: boolean; call?: number | null; fold?: boolean } | null } }).you?.legal;
+    if (action && (action as { type?: string }).type === "check" && legal && !legal.check && legal.call !== null && legal.call !== undefined) {
       return { type: "call" };
     }
-    if (action.type === "check" && !view.you.legal?.check && view.you.legal?.fold) return { type: "fold" };
-    return action;
+    if (action && (action as { type?: string }).type === "check" && legal && !legal.check && legal.fold) return { type: "fold" };
   }
-  if (table.engine?.kind === "belote") return chooseBeloteAction(projectBelote(table.engine, playerId));
-  throw new Error("Aucune partie.");
+  return action;
 }
 
-function apply(table: Table, playerId: string, action: PokerAction | BeloteAction) {
+function apply(table: Table, playerId: string, action: object) {
   if (!table.engine) throw new Error("La partie n'a pas commencé.");
-  if (table.engine.kind === "texas-holdem") {
-    table.engine = applyPoker(table.engine, playerId, action as PokerAction);
-  } else {
-    table.engine = applyBelote(table.engine, playerId, action as BeloteAction, table.rng);
-  }
+  const rule = moduleFor(table.engine.kind);
+  table.engine = rule.apply(table.engine, playerId, action, table.rng);
   touch(table);
 }
 
@@ -252,12 +225,9 @@ function schedule(table: Table) {
       apply(table, player.id, decide(table, player.id));
     } catch {
       try {
-        if (table.engine?.kind === "texas-holdem") apply(table, player.id, { type: "fold" });
-        else if (table.engine?.kind === "belote") {
-          const view = projectBelote(table.engine, player.id);
-          const card = view.legalCards[0];
-          if (card) apply(table, player.id, { type: "play", card });
-          else apply(table, player.id, { type: "pass" });
+        if (table.engine) {
+          const rule = moduleFor(table.engine.kind);
+          apply(table, player.id, rule.fallback(rule.project(table.engine, player.id) as never));
         }
       } catch {
         /* action de secours impossible */
@@ -270,8 +240,8 @@ function schedule(table: Table) {
 
 function advance(table: Table, reset: boolean) {
   if (!table.engine) throw new Error("Aucune donne à enchaîner.");
-  if (table.engine.kind === "texas-holdem") table.engine = continueHoldem(table.engine, table.rng, reset);
-  else table.engine = continueBelote(table.engine, table.rng);
+  const rule = moduleFor(table.engine.kind);
+  table.engine = rule.continue(table.engine, table.rng, reset);
   touch(table);
 }
 
@@ -299,7 +269,7 @@ export function createTable(input: {
   continueMs: number;
 }): { table: Table; player: Seat } {
   if (tables.size >= MAX_TABLES) throw new Error("Le serveur est plein. Réessayez un peu plus tard.");
-  const buyIn = input.game === "texas-holdem" ? stakesForBuyIn(input.stack ?? 1000).buyIn : null;
+  const buyIn = moduleFor(input.game).stack ? stakesForBuyIn(input.stack ?? 1000).buyIn : null;
   const player: Seat = {
     id: `p_${randomBytes(4).toString("hex")}`,
     token: randomBytes(24).toString("base64url"),
@@ -362,10 +332,10 @@ function start(table: Table) {
     nickname: player.nickname,
     isBot: player.isBot,
   }));
-  table.engine =
-    table.game === "belote"
-      ? createBelote(seats, table.rng, { target: table.target })
-      : createMatch(seats, table.rng, { startingStack: table.buyIn ?? 1000 });
+  table.engine = moduleFor(table.game).create(seats, table.rng, {
+    startingStack: table.buyIn ?? 1000,
+    target: table.target,
+  });
   touch(table);
 }
 
@@ -415,6 +385,11 @@ function handle(table: Table, player: Seat, msg: ClientMsg) {
   else if (msg.t === "action") {
     if (!msg.action || typeof msg.action !== "object") throw new Error("Action manquante.");
     apply(table, player.id, msg.action);
+  } else if (msg.t === "rebuy") {
+    if (!table.engine) throw new Error("La partie n'a pas commencé.");
+    const rule = moduleFor(table.engine.kind);
+    if (!rule.rebuy) throw new Error("Ce jeu n'a pas de recave.");
+    table.engine = rule.rebuy(table.engine, player.id);
   } else if (msg.t === "continue") {
     advance(table, table.engine?.phase === "match-over");
   } else if (msg.t === "chat") {

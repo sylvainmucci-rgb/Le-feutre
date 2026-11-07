@@ -121,7 +121,7 @@ function orderIndex(card: Card, trump: Suit): number {
   return index;
 }
 
-export function beats(card: Card, other: Card, trump: Suit, led: Suit): boolean {
+export function beats(card: Card, other: Card, trump: Suit, led: Card["s"]): boolean {
   if (card.s === trump && other.s !== trump) return true;
   if (card.s !== trump && other.s === trump) return false;
   if (card.s === trump && other.s === trump) return orderIndex(card, trump) < orderIndex(other, trump);
@@ -362,6 +362,7 @@ function bid(state: BeloteState, seat: number, action: BeloteAction, rng: Rng) {
     if (action.suit && action.suit !== state.faceUp.s) {
       throw new Error("Au premier tour, l'atout est la couleur de la retournée.");
     }
+    if (state.faceUp.s === "t" || state.faceUp.s === "x") throw new Error("Couleur attendue.");
     trump = state.faceUp.s;
   } else {
     if (!action.suit || !SUITS.includes(action.suit)) throw new Error("Annoncez une couleur.");

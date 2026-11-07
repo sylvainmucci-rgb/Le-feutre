@@ -1,10 +1,14 @@
 export const SUITS = ["s", "h", "d", "c"] as const;
 export type Suit = (typeof SUITS)[number];
+/** Atout et excuse du tarot. Ils n'entrent pas dans les jeux de 32 ou 52 cartes. */
+export type Face = Suit | "t" | "x";
 
 export type Card = {
   r: number;
-  s: Suit;
+  s: Face;
 };
+
+const FACES = ["s", "h", "d", "c", "t", "x"];
 
 export function isCard(value: unknown): value is Card {
   if (!value || typeof value !== "object") return false;
@@ -12,7 +16,9 @@ export function isCard(value: unknown): value is Card {
   return (
     typeof card.r === "number" &&
     Number.isInteger(card.r) &&
-    (SUITS as readonly string[]).includes(card.s) &&
+    card.r >= 0 &&
+    card.r <= 21 &&
+    FACES.includes(card.s) &&
     Object.keys(card).length === 2
   );
 }
@@ -55,18 +61,22 @@ const RANK_SHORT: Record<number, string> = {
   14: "A",
 };
 
-const SUIT_FR: Record<Suit, string> = {
+const SUIT_FR: Record<Face, string> = {
   s: "pique",
   h: "cœur",
   d: "carreau",
   c: "trèfle",
+  t: "atout",
+  x: "excuse",
 };
 
-const SUIT_GLYPH: Record<Suit, string> = {
+const SUIT_GLYPH: Record<Face, string> = {
   s: "♠",
   h: "♥",
   d: "♦",
   c: "♣",
+  t: "★",
+  x: "✶",
 };
 
 export function rankFr(rank: number): string {
@@ -77,19 +87,21 @@ export function rankShort(rank: number): string {
   return RANK_SHORT[rank] ?? String(rank);
 }
 
-export function suitFr(suit: Suit): string {
+export function suitFr(suit: Face): string {
   return SUIT_FR[suit];
 }
 
-export function suitGlyph(suit: Suit): string {
+export function suitGlyph(suit: Face): string {
   return SUIT_GLYPH[suit];
 }
 
 export function cardFr(card: Card): string {
+  if (card.s === "x") return "Excuse";
+  if (card.s === "t") return `${card.r} d'atout`;
   return `${rankFr(card.r)} de ${suitFr(card.s)}`;
 }
 
-export function isRed(suit: Suit): boolean {
+export function isRed(suit: Face): boolean {
   return suit === "h" || suit === "d";
 }
 

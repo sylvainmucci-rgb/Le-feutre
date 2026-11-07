@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { cardFr, cardKey, suitFr, suitGlyph, SUITS, type Card, type Suit } from "../shared/cards";
+import { cardFr, cardKey, suitFr, suitGlyph, SUITS, type Card, type Face, type Suit } from "../shared/cards";
 import { Avatar } from "./avatar";
 import { PlayingCard } from "./cards";
 import { playSound } from "./sound";
@@ -9,7 +9,7 @@ const TRUMP_ORDER = [11, 9, 14, 10, 13, 12, 8, 7];
 const PLAIN_ORDER = [14, 10, 13, 12, 11, 9, 8, 7];
 
 function sortHand(hand: Card[], trump: Suit | null): Card[] {
-  const suits = trump ? [trump, ...SUITS.filter((suit) => suit !== trump)] : [...SUITS];
+  const suits: Face[] = trump ? [trump, ...SUITS.filter((suit) => suit !== trump)] : [...SUITS];
   return [...hand].sort((a, b) => {
     const bySuit = suits.indexOf(a.s) - suits.indexOf(b.s);
     if (bySuit !== 0) return bySuit;

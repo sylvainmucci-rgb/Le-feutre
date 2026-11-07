@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PLAYABLE_GAMES } from "../shared/games";
+import { gameById } from "../shared/games";
 import { formatDollars, stakesForBuyIn } from "../shared/poker/holdem";
 import { Avatar } from "./avatar";
 import { FictionalBanner } from "./disclaimer";
@@ -19,8 +19,9 @@ export function Lobby({
   onCopied: () => void;
 }) {
   const [copied, setCopied] = useState(false);
-  const needed = view.game === "belote" ? 4 : 2;
-  const title = PLAYABLE_GAMES.find((game) => game.id === view.game)?.name ?? "Table";
+  const rule = gameById(view.game);
+  const needed = rule.min;
+  const title = rule.name;
   return (
     <section className="lobby">
       <div className="stage">

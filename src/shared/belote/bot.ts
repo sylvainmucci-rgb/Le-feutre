@@ -26,7 +26,8 @@ export function chooseBeloteAction(view: BeloteView): BeloteAction {
   return { type: "pass" };
 }
 
-function suitScore(hand: readonly Card[], trump: Suit): number {
+function suitScore(hand: readonly Card[], trump: Card["s"]): number {
+  if (trump === "t" || trump === "x") return 0;
   let score = 0;
   let count = 0;
   for (const card of hand) {

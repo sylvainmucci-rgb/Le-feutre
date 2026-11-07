@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { cardFr, isRed, rankShort, type Card, type Suit } from "../shared/cards";
+import { cardFr, isRed, rankShort, suitFr, type Card, type Suit } from "../shared/cards";
 
 const HEART =
   "M0 8.4 C-0.4 6.4 -7.6 2.2 -7.6 -2.6 C-7.6 -7.2 -3.2 -8.6 0 -5.2 C3.2 -8.6 7.6 -7.2 7.6 -2.6 C7.6 2.2 0.4 6.4 0 8.4 Z";
@@ -7,8 +7,15 @@ const SPADE =
   "M0 -10 C-6.4 -2.2 -8.4 1.2 -5.6 5.4 C-3.8 8.2 -1.8 7.2 0 4.4 C1.8 7.2 3.8 8.2 5.6 5.4 C8.4 1.2 6.4 -2.2 0 -10 Z M-1.5 4.8 H1.5 L1.1 11 H-1.1 Z";
 const DIAMOND = "M0 -11 L8.2 0 L0 11 L-8.2 0 Z";
 
-function SuitShape({ suit, x, y, scale = 1, flip = false }: { suit: Suit; x: number; y: number; scale?: number; flip?: boolean }) {
+function SuitShape({ suit, x, y, scale = 1, flip = false }: { suit: Card["s"]; x: number; y: number; scale?: number; flip?: boolean }) {
   const color = isRed(suit) ? "#9d1c28" : "#1b1714";
+  if (suit === "t" || suit === "x") {
+    return (
+      <text x={x} y={y} textAnchor="middle" fontSize={16 * scale} fill={color}>
+        {suit === "x" ? "✶" : "★"}
+      </text>
+    );
+  }
   const sy = flip ? -scale : scale;
   if (suit === "c") {
     return (
@@ -184,31 +191,76 @@ function CardBack() {
   );
 }
 
+function tarotRank(card: Card): string {
+  if (card.s === "x") return "EX";
+  if (card.s === "t") return String(card.r);
+  if (card.r === 14) return "R";
+  if (card.r === 13) return "D";
+  if (card.r === 12) return "C";
+  if (card.r === 11) return "V";
+  return String(card.r);
+}
+
+function tarotTitle(card: Card): string {
+  if (card.s === "x") return "Excuse";
+  if (card.s === "t") return `${card.r} d'atout`;
+  const name = card.r === 14 ? "Roi" : card.r === 13 ? "Dame" : card.r === 12 ? "Cavalier" : card.r === 11 ? "Valet" : card.r === 1 ? "As" : String(card.r);
+  return `${name} de ${suitFr(card.s)}`;
+}
+
+function TarotArt({ card }: { card: Card }) {
+  const uid = useId().replace(/:/g, "");
+  const color = isRed(card.s) ? "#9d1c28" : "#1b1714";
+  return (
+    <svg viewBox="0 0 160 224" role="presentation">
+      <defs>
+        <linearGradient id={`paper${uid}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#fffdf8" />
+          <stop offset="1" stopColor="#f1e4d0" />
+        </linearGradient>
+      </defs>
+      <rect x="3" y="3" width="154" height="218" rx="14" fill={`url(#paper${uid})`} stroke="#e4d3b8" strokeWidth="2.5" />
+      <text x="16" y="40" fill={color} fontSize="28" fontFamily="Palatino, Georgia, serif" fontWeight="700">
+        {tarotRank(card)}
+      </text>
+      <text x="80" y="120" textAnchor="middle" fill={color} fontSize={card.s === "t" ? 54 : 28} fontFamily="Palatino, Georgia, serif" fontWeight="700">
+        {card.s === "t" ? card.r : card.s === "x" ? "✶" : tarotRank(card)}
+      </text>
+      <text x="80" y="148" textAnchor="middle" fill={color} fontSize="12" fontFamily="Palatino, Georgia, serif">
+        {card.s === "t" ? "ATOUT" : card.s === "x" ? "EXCUSE" : suitFr(card.s)}
+      </text>
+    </svg>
+  );
+}
+
 export function PlayingCard({
   card,
   hidden = false,
   onClick,
   disabled = false,
   dimmed = false,
+  naming = "poker",
 }: {
   card?: Card | null;
   hidden?: boolean;
   onClick?: () => void;
   disabled?: boolean;
   dimmed?: boolean;
+  naming?: "poker" | "tarot";
 }) {
   const faceDown = hidden || !card;
   const className = `playing-card ${dimmed ? "dim" : ""}`;
-  const art = faceDown ? <CardBack /> : <CardArt card={card} />;
+  const art = faceDown ? <CardBack /> : naming === "tarot" ? <TarotArt card={card} /> : <CardArt card={card} />;
+  const label = faceDown || !card ? "Carte cachée" : naming === "tarot" ? tarotTitle(card) : cardFr(card);
   if (!onClick) {
     return (
-      <div className={className} role={faceDown ? undefined : "img"} aria-hidden={faceDown ? true : undefined} aria-label={faceDown ? undefined : cardFr(card)}>
+      <div className={className} role={faceDown ? undefined : "img"} aria-hidden={faceDown ? true : undefined} aria-label={faceDown ? undefined : label}>
         {art}
       </div>
     );
   }
   return (
-    <button type="button" className={className} onClick={onClick} disabled={disabled} aria-label={faceDown ? "Carte cachée" : cardFr(card)}>
+    <button type="button" className={className} onClick={onClick} disabled={disabled} aria-label={label}>
       {art}
     </button>
   );

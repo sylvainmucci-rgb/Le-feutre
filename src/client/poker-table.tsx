@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { Card } from "../shared/cards";
 import { formatDollars } from "../shared/poker/holdem";
 import { Avatar } from "./avatar";
 import { PlayingCard } from "./cards";
@@ -16,6 +17,7 @@ const STREETS: Record<string, string> = {
 
 export function PokerTable({ view, send, youId }: { view: PokerView; send: (payload: object) => void; youId: string }) {
   const [amount, setAmount] = useState(view.you.legal?.raise?.minTo ?? view.bb);
+  const [discard, setDiscard] = useState<Card[]>([]);
   const seen = useRef<{ pot: number; board: number; hand: number; result: string } | null>(null);
   const minRaise = view.you.legal?.raise?.minTo;
   const resultLine = view.result?.summary ?? "";
@@ -100,9 +102,26 @@ export function PokerTable({ view, send, youId }: { view: PokerView; send: (payl
             </span>
           </div>
         </div>
-        <div className="holes">
-          {view.you.hole ? (
-            view.you.hole.map((card) => <PlayingCard key={`${card.r}${card.s}`} card={card} />)
+        <div className={Array.isArray(view.you.hole) && view.you.hole.length > 3 ? "fan holes-fan" : "holes"} data-count={view.you.hole?.length ?? 0}>
+          {view.you.hole && view.you.hole.length > 0 ? (
+            view.you.hole.map((card) => (
+              <span key={`${card.r}${card.s}`} className="shell">
+                <PlayingCard
+                  card={card}
+                  onClick={
+                    view.phase === "draw" && view.toActId === youId
+                      ? () =>
+                          setDiscard((current) =>
+                            current.some((item) => item.r === card.r && item.s === card.s)
+                              ? current.filter((item) => !(item.r === card.r && item.s === card.s))
+                              : [...current, card],
+                          )
+                      : undefined
+                  }
+                  dimmed={view.phase === "draw" && discard.some((item) => item.r === card.r && item.s === card.s)}
+                />
+              </span>
+            ))
           ) : (
             <>
               <PlayingCard hidden />
@@ -121,6 +140,18 @@ export function PokerTable({ view, send, youId }: { view: PokerView; send: (payl
       ) : (
         <FictionalBanner compact />
       )}
+      {view.you.canRebuy ? (
+        <button type="button" className="btn-brass" onClick={() => send({ t: "rebuy" })}>
+          Recaver le tapis initial ({view.you.rebuys ?? 0}/3)
+        </button>
+      ) : null}
+      {view.phase === "draw" && view.toActId === youId ? (
+        <div className="actions">
+          <button type="button" className="btn-brass" onClick={() => send({ t: "action", action: { type: "discard", cards: discard } })}>
+            {discard.length === 0 ? "Garder les cinq cartes" : `Échanger ${discard.length}`}
+          </button>
+        </div>
+      ) : null}
       {legal ? (
         <div className="actions">
           {legal.fold ? (
@@ -170,14 +201,15 @@ function SeatPlate({ seat, index, win }: { seat: PokerSeat; index: number; win: 
   return (
     <article className={`seat seat-i${index} ${seat.isTurn ? "turn" : ""} ${seat.folded ? "folded" : ""} ${win ? "win" : ""}`}>
       <div className="backs">
-        {seat.hole ? (
-          seat.hole.map((card) => <PlayingCard key={`${card.r}${card.s}${seat.id}`} card={card} />)
-        ) : seat.folded ? null : (
-          <>
-            <PlayingCard hidden />
-            <PlayingCard hidden />
-          </>
-        )}
+        {(seat.up ?? []).map((card) => (
+          <PlayingCard key={`${card.r}${card.s}${seat.id}`} card={card} />
+        ))}
+        {seat.hole
+          ? seat.hole.map((card) => <PlayingCard key={`h${card.r}${card.s}${seat.id}`} card={card} />)
+          : null}
+        {Array.from({ length: seat.hiddenCount ?? (seat.hole || seat.folded ? 0 : 2) }, (_, index) => (
+          <PlayingCard key={`b${index}`} hidden />
+        ))}
       </div>
       <div className="plate">
         <Avatar name={seat.nickname} />

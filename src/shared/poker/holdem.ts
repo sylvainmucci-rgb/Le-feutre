@@ -32,6 +32,8 @@ export type PokerSeat = {
   canRaise: boolean;
   isBot: boolean;
   out: boolean;
+  /** Recaves déjà prises. Trois au plus, puis élimination. */
+  rebuys: number;
 };
 
 export type Street = "preflop" | "flop" | "turn" | "river";
@@ -120,6 +122,8 @@ export type HoldemView = {
     folded: boolean;
     allIn: boolean;
     legal: LegalPoker | null;
+    rebuys: number;
+    canRebuy: boolean;
   };
   seats: HoldemSeatView[];
   result: HandResult | null;
@@ -144,6 +148,9 @@ export const HOLDEM_STAKES = {
 } as const;
 
 export type HoldemBuyIn = keyof typeof HOLDEM_STAKES;
+
+/** Trois recaves au montant initial, puis le joueur sort. */
+export const MAX_REBUYS = 3;
 
 export function stakesForBuyIn(buyIn: number): { buyIn: HoldemBuyIn; sb: number; bb: number } {
   if (buyIn !== 200 && buyIn !== 500 && buyIn !== 1000) {
@@ -212,6 +219,7 @@ export function createMatch(
       canRaise: true,
       isBot: Boolean(seat.isBot),
       out: false,
+      rebuys: 0,
     })),
     button: -1,
     sb,
@@ -534,26 +542,61 @@ function distanceFromButton(state: HoldemState, seat: PokerSeat): number {
   return (index - state.button - 1 + state.players.length) % state.players.length;
 }
 
+export function canRebuySeat(seat: PokerSeat): boolean {
+  return seat.stack <= 0 && seat.rebuys < MAX_REBUYS;
+}
+
 function closeMatchIfNeeded(state: HoldemState) {
   const alive = state.players.filter((seat) => seat.stack > 0);
-  if (alive.length < 2) {
-    state.phase = "match-over";
-    const winner = alive[0];
-    if (winner) log(state, `${winner.nickname} remporte la partie.`);
+  const pending = state.players.filter((seat) => canRebuySeat(seat));
+  if (alive.length >= 2) return;
+  if (alive.length + pending.length >= 2) {
+    state.phase = "between";
+    log(state, "Un tapis est vide : recave possible, trois fois au plus, au montant initial.");
+    return;
   }
+  state.phase = "match-over";
+  const winner = alive[0];
+  if (winner) log(state, `${winner.nickname} remporte la partie.`);
 }
 
 export function continueHoldem(state: HoldemState, rng: Rng, reset = false): HoldemState {
   if (state.phase === "betting") throw new Error("La donne n'est pas terminée.");
   if (state.phase === "match-over" || reset) {
     const fresh = structuredClone(state);
-    for (const seat of fresh.players) seat.stack = fresh.startingStack;
+    for (const seat of fresh.players) {
+      seat.stack = fresh.startingStack;
+      seat.rebuys = 0;
+    }
     fresh.phase = "between";
     fresh.handNo = 0;
     fresh.log = ["Nouvelle partie, dollars fictifs redistribués."];
     return dealHand(fresh, rng);
   }
-  return dealHand(state, rng);
+  const next = structuredClone(state);
+  for (const seat of next.players) {
+    if (seat.stack <= 0 && seat.isBot && seat.rebuys < MAX_REBUYS) {
+      seat.rebuys += 1;
+      seat.stack = next.startingStack;
+      log(next, `${seat.nickname} recave ${formatDollars(next.startingStack)} (${seat.rebuys}/${MAX_REBUYS}).`);
+    }
+  }
+  return dealHand(next, rng);
+}
+
+export function rebuyHoldem(state: HoldemState, playerId: string): HoldemState {
+  if (state.phase === "betting") throw new Error("La donne n'est pas terminée.");
+  const next = structuredClone(state);
+  const seat = next.players.find((candidate) => candidate.id === playerId);
+  if (!seat) throw new Error("Joueur introuvable.");
+  if (seat.stack > 0) throw new Error("Il vous reste des dollars fictifs.");
+  if (seat.rebuys >= MAX_REBUYS) throw new Error("Trois recaves déjà prises. Vous êtes éliminé.");
+  seat.rebuys += 1;
+  seat.stack = next.startingStack;
+  seat.out = false;
+  log(next, `${seat.nickname} recave ${formatDollars(next.startingStack)} (${seat.rebuys}/${MAX_REBUYS}). Dollars fictifs.`);
+  if (next.players.filter((candidate) => candidate.stack > 0).length >= 2) next.phase = "between";
+  return next;
 }
 
 export function legalPoker(state: HoldemState, playerId: string): LegalPoker | null {
@@ -616,6 +659,8 @@ export function projectHoldem(state: HoldemState, playerId: string): HoldemView 
       folded: me.folded,
       allIn: me.allIn,
       legal: legalPoker(state, playerId),
+      rebuys: me.rebuys,
+      canRebuy: state.phase !== "betting" && canRebuySeat(me),
     },
     seats: state.players.map((seat, index) => ({
       id: seat.id,

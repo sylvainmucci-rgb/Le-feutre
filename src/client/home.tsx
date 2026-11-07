@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { NOT_IN_THIS_VERSION, type GameId } from "../shared/games";
+import { PLAYABLE_GAMES, type GameId } from "../shared/games";
 import { formatDollars, stakesForBuyIn, type HoldemBuyIn } from "../shared/poker/holdem";
 import { PlayingCard } from "./cards";
-import { ChipStack } from "./chips";
 import { FictionalBanner } from "./disclaimer";
 
 export function Home({
@@ -50,52 +49,44 @@ export function Home({
         autoComplete="nickname"
         onChange={(event) => setNickname(event.target.value)}
       />
-      <div className="choices">
-        <article className="invite">
-          <p className="eyebrow">Poker</p>
-          <h2>Texas Hold&apos;em</h2>
-          <p>Deux à huit joueurs. Préflop, flop, turn, river. La meilleure main de cinq cartes.</p>
-          <div className="preview" aria-hidden="true">
-            <PlayingCard card={{ r: 14, s: "s" }} />
-            <PlayingCard card={{ r: 14, s: "h" }} />
-            <ChipStack cents={buyIn} />
+      <section className="stakes-block">
+        <h2>Tapis fictif des pokers</h2>
+        <fieldset className="stakes">
+          <legend>Le même montant pour tout le monde. Trois recaves au plus, puis élimination.</legend>
+          {([200, 500, 1000] as const).map((amount) => {
+            const stake = stakesForBuyIn(amount);
+            return (
+              <label key={amount} className={buyIn === amount ? "stake on" : "stake"}>
+                <input type="radio" name="buy-in" checked={buyIn === amount} onChange={() => setBuyIn(amount)} />
+                <span>
+                  {formatDollars(amount)}
+                  <small>
+                    blinds {formatDollars(stake.sb)} / {formatDollars(stake.bb)}
+                  </small>
+                </span>
+              </label>
+            );
+          })}
+        </fieldset>
+        <p className="note">Dollars sans valeur réelle. Les blinds ne doublent pas. Hold&apos;em no-limit, Omaha pot-limit.</p>
+      </section>
+      {(["Poker", "Plis", "Table"] as const).map((group) => (
+        <section key={group}>
+          <h2>{group}</h2>
+          <div className="choices">
+            {PLAYABLE_GAMES.filter((game) => game.group === group).map((game) => (
+              <article key={game.id} className="invite">
+                <p className="eyebrow">{game.players} joueurs</p>
+                <h2>{game.name}</h2>
+                <p>{game.summary}</p>
+                <button type="button" className="btn-brass" onClick={() => onCreate(game.id, game.stack ? buyIn : undefined)}>
+                  Créer une table
+                </button>
+              </article>
+            ))}
           </div>
-          <fieldset className="stakes">
-            <legend>Tapis initial fictif, le même pour tout le monde</legend>
-            {([200, 500, 1000] as const).map((amount) => {
-              const stake = stakesForBuyIn(amount);
-              return (
-                <label key={amount} className={buyIn === amount ? "stake on" : "stake"}>
-                  <input type="radio" name="buy-in" checked={buyIn === amount} onChange={() => setBuyIn(amount)} />
-                  <span>
-                    {formatDollars(amount)}
-                    <small>
-                      blinds {formatDollars(stake.sb)} / {formatDollars(stake.bb)}
-                    </small>
-                  </span>
-                </label>
-              );
-            })}
-          </fieldset>
-          <p className="note">Sans valeur réelle. Les blinds restent fixes pendant toute la partie.</p>
-          <button type="button" className="btn-brass" onClick={() => onCreate("texas-holdem", buyIn)}>
-            Créer une table Hold&apos;em
-          </button>
-        </article>
-        <article className="invite">
-          <p className="eyebrow">Plis</p>
-          <h2>Belote classique</h2>
-          <p>Quatre joueurs, deux équipes. Prise, atout, plis, belote et rebelote. Partie en 1{"\u00a0"}000 points.</p>
-          <div className="preview" aria-hidden="true">
-            <PlayingCard card={{ r: 11, s: "h" }} />
-            <PlayingCard card={{ r: 9, s: "h" }} />
-            <PlayingCard card={{ r: 14, s: "d" }} />
-          </div>
-          <button type="button" className="btn-brass" onClick={() => onCreate("belote")}>
-            Créer une table de belote
-          </button>
-        </article>
-      </div>
+        </section>
+      ))}
       <form
         className="join"
         onSubmit={(event) => {
@@ -116,7 +107,10 @@ export function Home({
           Rejoindre
         </button>
       </form>
-      <p className="note quiet-note">Pas encore à cette table : {NOT_IN_THIS_VERSION.join(", ")}.</p>
+      <p className="note quiet-note">
+        Poignées et chelem du tarot, sans-atout et tout-atout de la coinche ne sont pas comptés. La bataille se joue en donnes
+        courtes, pas jusqu&apos;à épuisement du paquet.
+      </p>
     </section>
   );
 }

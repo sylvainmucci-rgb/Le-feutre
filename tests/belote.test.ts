@@ -81,6 +81,7 @@ describe("belote : cartes, plis, prise et score", () => {
     const rng = mulberry32(3);
     let state = createBelote(players, rng);
     const face = state.faceUp!.s;
+    if (face === "t" || face === "x") throw new Error("couleur attendue");
     state = applyBelote(state, "e", { type: "pass" }, rng);
     state = applyBelote(state, "s", { type: "pass" }, rng);
     state = applyBelote(state, "o", { type: "pass" }, rng);

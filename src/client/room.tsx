@@ -3,8 +3,29 @@ import { ChatPanel } from "./chat";
 import { BeloteTable } from "./belote-table";
 import { Lobby } from "./lobby";
 import { PokerTable } from "./poker-table";
+import { TrickTable } from "./trick-table";
+import type { EngineView, PokerKind, PokerView, TrickScene } from "./types";
 import { playSound, setSoundOn, soundOn, subscribeSound } from "./sound";
 import type { TableView } from "./types";
+
+const POKER: readonly PokerKind[] = ["texas-holdem", "omaha", "stud", "draw"];
+const TRICKS = ["coinche", "manille", "ecarte", "bataille", "tarot"] as const;
+
+function isPoker(kind: string): kind is PokerKind {
+  return (POKER as readonly string[]).includes(kind);
+}
+
+function isPokerView(engine: EngineView): engine is PokerView {
+  return isPoker(engine.kind);
+}
+
+function isTrick(kind: string): kind is TrickScene["kind"] {
+  return (TRICKS as readonly string[]).includes(kind);
+}
+
+function isTrickView(engine: EngineView): engine is TrickScene {
+  return isTrick(engine.kind);
+}
 
 export function SoundButton() {
   const [on, setOn] = useState(soundOn);
@@ -69,10 +90,12 @@ export function TableRoom({
       <div className="table-wrap">
         {view.status === "lobby" ? (
           <Lobby view={view} link={link} host={Boolean(host)} send={send} onCopied={onCopied} />
-        ) : view.engine?.kind === "texas-holdem" ? (
+        ) : view.engine && isPokerView(view.engine) ? (
           <PokerTable view={view.engine} send={send} youId={view.youId} />
         ) : view.engine?.kind === "belote" ? (
           <BeloteTable view={view.engine} send={send} />
+        ) : view.engine && isTrickView(view.engine) ? (
+          <TrickTable view={view.engine} send={send} />
         ) : null}
       </div>
       <aside className="side">

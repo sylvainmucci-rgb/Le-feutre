@@ -27,16 +27,20 @@ export type PokerSeat = {
   allIn: boolean;
   isBot: boolean;
   out?: boolean;
-  hole: [Card, Card] | null;
+  hole: Card[] | [Card, Card] | null;
+  up?: Card[];
+  hiddenCount?: number;
   isButton: boolean;
   isTurn: boolean;
   isSmallBlind?: boolean;
   isBigBlind?: boolean;
 };
 
+export type PokerKind = "texas-holdem" | "omaha" | "stud" | "draw";
+
 export type PokerView = {
-  kind: "texas-holdem";
-  phase: "betting" | "between" | "match-over";
+  kind: PokerKind;
+  phase: string;
   street: string;
   board: Card[];
   pot: number;
@@ -46,10 +50,13 @@ export type PokerView = {
   toActId: string | null;
   you: {
     id: string;
-    hole: [Card, Card] | null;
+    hole: Card[] | [Card, Card] | null;
     stack: number;
     toCall: number;
     legal: PokerLegal | null;
+    rebuys?: number;
+    canRebuy?: boolean;
+    prompts?: { label: string; action: object }[];
   };
   seats: PokerSeat[];
   result: { summary: string; revealed: { playerId: string; rank: string }[]; awards?: { playerId: string; amount: number }[] } | null;
@@ -87,7 +94,27 @@ export type BeloteView = {
   turnSeat: number | null;
 };
 
-export type EngineView = PokerView | BeloteView;
+export type TrickScene = {
+  kind: "coinche" | "manille" | "ecarte" | "bataille" | "tarot";
+  phase: string;
+  trumpLabel: string;
+  scores: string;
+  trick: { seat: number; card: Card }[];
+  you: { seat: number; hand: Card[] };
+  seats: { id: string; nickname: string; seat: number; cards: number; isTurn: boolean; tags: string }[];
+  legalCards: Card[];
+  prompts: { label: string; action: object }[];
+  result: { summary: string } | null;
+  log: string[];
+  faceUp?: Card | null;
+  discard?: boolean;
+  discardCount?: number;
+  naming?: "tarot";
+  dog?: Card[];
+  teams?: string[];
+};
+
+export type EngineView = PokerView | BeloteView | TrickScene;
 
 export type TableView = {
   code: string;
