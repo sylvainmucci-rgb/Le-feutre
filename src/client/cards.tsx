@@ -1,5 +1,6 @@
-import { useId } from "react";
+import { useContext, useId } from "react";
 import { cardFr, isRed, rankShort, suitFr, type Card, type Suit } from "../shared/cards";
+import { LookContext } from "./look";
 
 const HEART =
   "M0 8.4 C-0.4 6.4 -7.6 2.2 -7.6 -2.6 C-7.6 -7.2 -3.2 -8.6 0 -5.2 C3.2 -8.6 7.6 -7.2 7.6 -2.6 C7.6 2.2 0.4 6.4 0 8.4 Z";
@@ -168,6 +169,15 @@ function CardArt({ card }: { card: Card }) {
 
 function CardBack() {
   const uid = useId().replace(/:/g, "");
+  const back = useContext(LookContext).back;
+  const palette =
+    back === "nuit"
+      ? { hi: "#24324d", lo: "#101826", ink: "#d7e4ff", line: "#9bb6e0" }
+      : back === "soleil"
+        ? { hi: "#f6d27a", lo: "#e09a3e", ink: "#6a3b12", line: "#fff4d2" }
+        : back === "carnaval"
+          ? { hi: "#e25b78", lo: "#5b4db8", ink: "#fff7ea", line: "#ffe08a" }
+          : { hi: "#1a6a48", lo: "#083526", ink: "#f0d7a2", line: "#e6c98a" };
   return (
     <svg viewBox="0 0 160 224" aria-hidden="true">
       <defs>
@@ -175,16 +185,16 @@ function CardBack() {
           <path d="M9 0 L18 9 L9 18 L0 9 Z" fill="none" stroke="#e6c98a" strokeOpacity="0.45" strokeWidth="0.7" />
         </pattern>
         <radialGradient id={`back${uid}`} cx="50%" cy="42%" r="70%">
-          <stop offset="0" stopColor="#1a6a48" />
-          <stop offset="1" stopColor="#083526" />
+          <stop offset="0" stopColor={palette.hi} />
+          <stop offset="1" stopColor={palette.lo} />
         </radialGradient>
       </defs>
-      <rect x="3" y="3" width="154" height="218" rx="14" fill={`url(#back${uid})`} stroke="#d7b56a" strokeWidth="3" />
+      <rect x="3" y="3" width="154" height="218" rx="14" fill={`url(#back${uid})`} stroke={palette.line} strokeWidth="3" />
       <rect x="10" y="10" width="140" height="204" rx="10" fill={`url(#lat${uid})`} />
-      <rect x="10" y="10" width="140" height="204" rx="10" fill="none" stroke="#e6c98a" strokeOpacity="0.8" />
-      <ellipse cx="80" cy="112" rx="34" ry="46" fill="#07281c" stroke="#e6c98a" strokeWidth="2" />
-      <ellipse cx="80" cy="112" rx="26" ry="36" fill="none" stroke="#e6c98a" strokeOpacity="0.65" />
-      <text x="80" y="120" textAnchor="middle" fontSize="28" fontFamily="Palatino, Georgia, serif" fill="#f0d7a2" fontWeight="700">
+      <rect x="10" y="10" width="140" height="204" rx="10" fill="none" stroke={palette.line} strokeOpacity="0.8" />
+      <ellipse cx="80" cy="112" rx="34" ry="46" fill={palette.lo} stroke={palette.line} strokeWidth="2" />
+      <ellipse cx="80" cy="112" rx="26" ry="36" fill="none" stroke={palette.line} strokeOpacity="0.65" />
+      <text x="80" y="120" textAnchor="middle" fontSize="28" fontFamily="Palatino, Georgia, serif" fill={palette.ink} fontWeight="700">
         LF
       </text>
     </svg>

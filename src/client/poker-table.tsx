@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Card } from "../shared/cards";
 import { formatDollars } from "../shared/poker/holdem";
 import { Avatar } from "./avatar";
+import { Trinket, usePerson } from "./look";
 import { PlayingCard } from "./cards";
 import { ChipStack } from "./chips";
 import { FictionalBanner } from "./disclaimer";
@@ -92,7 +93,8 @@ export function PokerTable({ view, send, youId }: { view: PokerView; send: (payl
       </div>
       <div className="hero-dock">
         <div className={`plate hero-plate ${view.toActId === youId ? "turn" : ""} ${you?.folded ? "folded" : ""}`}>
-          <Avatar name={you?.nickname || "Vous"} />
+          <Avatar name={you?.nickname || "Vous"} reaction={usePerson(youId)?.reaction} />
+          <Trinket id={usePerson(youId)?.trinket} />
           <div>
             <strong>{you?.nickname ?? "Vous"}</strong>
             <span>Tapis fictif {formatDollars(view.you.stack)}</span>
@@ -198,6 +200,7 @@ export function PokerTable({ view, send, youId }: { view: PokerView; send: (payl
 }
 
 function SeatPlate({ seat, index, win }: { seat: PokerSeat; index: number; win: boolean }) {
+  const person = usePerson(seat.id);
   return (
     <article className={`seat seat-i${index} ${seat.isTurn ? "turn" : ""} ${seat.folded ? "folded" : ""} ${win ? "win" : ""}`}>
       <div className="backs">
@@ -212,7 +215,8 @@ function SeatPlate({ seat, index, win }: { seat: PokerSeat; index: number; win: 
         ))}
       </div>
       <div className="plate">
-        <Avatar name={seat.nickname} />
+        <Trinket id={person?.trinket} />
+        <Avatar name={seat.nickname} reaction={person?.reaction} />
         <strong>{seat.nickname}</strong>
         <span>{formatDollars(seat.stack)}</span>
         <span className="tags">

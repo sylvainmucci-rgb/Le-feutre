@@ -2,8 +2,37 @@ import { useState } from "react";
 import { gameById } from "../shared/games";
 import { formatDollars, stakesForBuyIn } from "../shared/poker/holdem";
 import { Avatar } from "./avatar";
+import { Trinket, usePerson } from "./look";
 import { FictionalBanner } from "./disclaimer";
 import type { TableView } from "./types";
+
+function RosterSeat({
+  player,
+  host,
+  send,
+}: {
+  player: TableView["players"][number];
+  host: boolean;
+  send: (payload: object) => void;
+}) {
+  const person = usePerson(player.id);
+  return (
+    <li>
+      <Trinket id={person?.trinket || player.trinket} />
+      <Avatar name={player.nickname} reaction={person?.reaction || player.reaction} />
+      <div>
+        <strong>{player.nickname}</strong>
+        <span>{player.isHost ? "Hôte" : player.isBot ? "Automate" : "Joueur"}</span>
+        <span className={player.connected ? "present" : "away"}>{player.connected ? "Présent" : "Absent"}</span>
+      </div>
+      {host && player.isBot ? (
+        <button type="button" className="btn-ghost tiny" onClick={() => send({ t: "remove-bot", playerId: player.id })}>
+          Retirer
+        </button>
+      ) : null}
+    </li>
+  );
+}
 
 export function Lobby({
   view,
@@ -44,19 +73,7 @@ export function Lobby({
       </div>
       <ul className="roster">
         {view.players.map((player) => (
-          <li key={player.id}>
-            <Avatar name={player.nickname} />
-            <div>
-              <strong>{player.nickname}</strong>
-              <span>{player.isHost ? "Hôte" : player.isBot ? "Automate" : "Joueur"}</span>
-              <span className={player.connected ? "present" : "away"}>{player.connected ? "Présent" : "Absent"}</span>
-            </div>
-            {host && player.isBot ? (
-              <button type="button" className="btn-ghost tiny" onClick={() => send({ t: "remove-bot", playerId: player.id })}>
-                Retirer
-              </button>
-            ) : null}
-          </li>
+          <RosterSeat key={player.id} player={player} host={host} send={send} />
         ))}
       </ul>
       <p className="lead slim">Envoyez ce lien aux personnes qui jouent avec vous. Le code est le secret de la table.</p>

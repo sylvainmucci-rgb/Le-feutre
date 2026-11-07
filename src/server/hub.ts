@@ -9,7 +9,8 @@ import { CHAT_HISTORY, pushChat, type ChatMessage } from "../shared/chat";
 import { isGameId, type GameId } from "../shared/games";
 import { mulberry32, type Rng } from "../shared/rng";
 import { stakesForBuyIn, type HoldemBuyIn } from "../shared/poker/holdem";
-import { bankrollOf, configureStore, palmaresSnapshot, recordEvent, recordOutcome, storeMode, winnersFrom, type BankSeat } from "./palmares";
+import { isReaction, isTrinket, trinketForName } from "../shared/fun";
+import { bankrollOf, configureStore, mergeIncoming, palmaresSnapshot, recordEvent, recordOutcome, storeMode, winnersFrom, type BankSeat } from "./palmares";
 
 export type TableView = {
   code: string;
@@ -37,6 +38,9 @@ type Seat = {
   isBot: boolean;
   connected: boolean;
   lastChat: number;
+  trinket: string;
+  reaction: string;
+  reactionAt: number;
   socket?: WebSocket;
 };
 
@@ -71,13 +75,16 @@ type ClientMsg = {
   action?: object;
   text?: string;
   stack?: number;
+  book?: unknown;
+  emoji?: string;
+  trinket?: string;
 };
 
 const tables = new Map<string, Table>();
 const sockets = new Map<WebSocket, { table: Table; playerId: string }>();
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const MAX_TABLES = 40;
-const MAX_MESSAGE = 4096;
+const MAX_MESSAGE = 16384;
 
 function code(): string {
   let value = "";
@@ -143,6 +150,8 @@ export function viewFor(table: Table, playerId: string): TableView {
       isBot: player.isBot,
       connected: player.connected,
       isHost: player.id === table.hostId,
+      trinket: player.trinket,
+      reaction: player.reaction && Date.now() - player.reactionAt < 8_000 ? player.reaction : "",
     })),
     chat: table.chat.slice(-CHAT_HISTORY),
     engine,
@@ -198,7 +207,7 @@ function emit(table: Table) {
   for (const player of table.players) {
     if (!player.socket) continue;
     try {
-      send(player.socket, { t: "state", view: viewFor(table, player.id) });
+      send(player.socket, { t: "state", view: viewFor(table, player.id), board: palmaresSnapshot() });
     } catch (error) {
       send(player.socket, {
         t: "error",
@@ -300,6 +309,7 @@ function welcome(table: Table, player: Seat) {
     token: player.token,
     playerId: player.id,
     view: viewFor(table, player.id),
+    board: palmaresSnapshot(),
   });
 }
 
@@ -325,6 +335,9 @@ export function createTable(input: {
     isBot: false,
     connected: true,
     lastChat: 0,
+    trinket: "rien",
+    reaction: "",
+    reactionAt: 0,
   };
   const table: Table = {
     code: code(),
@@ -359,6 +372,9 @@ function addBot(table: Table) {
     isBot: true,
     connected: true,
     lastChat: 0,
+    trinket: trinketForName(`Automate ${n}`),
+    reaction: "",
+    reactionAt: 0,
   });
   touch(table);
 }
@@ -442,6 +458,13 @@ function handle(table: Table, player: Seat, msg: ClientMsg) {
     table.engine = rule.rebuy(table.engine, player.id);
   } else if (msg.t === "continue") {
     advance(table, table.engine?.phase === "match-over");
+  } else if (msg.t === "react") {
+    if (!isReaction(msg.emoji)) throw new Error("Réaction inconnue.");
+    player.reaction = msg.emoji;
+    player.reactionAt = Date.now();
+  } else if (msg.t === "trinket") {
+    if (!isTrinket(msg.trinket)) throw new Error("Objet inconnu.");
+    player.trinket = msg.trinket;
   } else if (msg.t === "chat") {
     postChat(table, player, String(msg.text ?? ""));
   } else if (msg.t === "leave") {
@@ -643,6 +666,7 @@ export async function startServer(options?: {
         if (msg.t === "create") {
           if (!isGameId(msg.game)) throw new Error("Ce jeu n'est pas disponible.");
           const nick = cleanNick(msg.nickname);
+          mergeIncoming(msg.book);
           const { table, player } = createTable({
             game: msg.game,
             nickname: nick,
@@ -658,6 +682,7 @@ export async function startServer(options?: {
         if (msg.t === "join") {
           const table = tables.get(String(msg.code || "").toUpperCase());
           if (!table) throw new Error("Table introuvable. Vérifiez le code.");
+          mergeIncoming(msg.book);
           if (table.engine) throw new Error("La partie a déjà commencé.");
           if (table.players.length >= limits(table.game).max) throw new Error("La table est complète.");
           const player: Seat = {
@@ -667,6 +692,9 @@ export async function startServer(options?: {
             isBot: false,
             connected: true,
             lastChat: 0,
+            trinket: "rien",
+            reaction: "",
+            reactionAt: 0,
           };
           table.players.push(player);
           bind(socket, table, player);
@@ -678,6 +706,7 @@ export async function startServer(options?: {
           const table = tables.get(String(msg.code || "").toUpperCase());
           const player = table?.players.find((seat) => seat.token && seat.token === msg.token);
           if (!table || !player) throw new Error("Reprise impossible. Le jeton ou la table n'existe plus.");
+          mergeIncoming(msg.book);
           bind(socket, table, player);
           welcome(table, player);
           emit(table);

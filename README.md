@@ -27,7 +27,7 @@ npm start
 
 ## Ce qui se joue
 
-Hold'em no-limit, Omaha pot-limit, stud, poker fermé, belote, coinche couleur, tarot, manille muette, écarté et bataille corse. Les dollars de poker sont fictifs. Trois recaves au montant initial, puis élimination. Le coin soirée ajoute un loto affichable sur téléviseur, une roulette européenne et un blackjack, tous en jetons fictifs. Le palmarès, les duels, les recaves et les éliminations sont écrits dans Postgres quand `DATABASE_URL` répond (SSL pour Render) ; sinon ils restent en mémoire. `GET /api/health` renvoie `{ok:true, db:"postgres"|"memory"}`.
+Hold'em no-limit, Omaha pot-limit, stud, poker fermé, belote, coinche couleur, tarot, manille muette, écarté et bataille corse. Les dollars de poker sont fictifs. Trois recaves au montant initial, puis élimination. Le coin soirée ajoute un loto affichable sur téléviseur, une roulette européenne et un blackjack, tous en jetons fictifs. Le classement principal vit dans le navigateur de chaque joueur et se renvoie à la table pour se reconstruire après une mise en veille. Postgres reste optionnel si `DATABASE_URL` répond. `GET /api/health` renvoie `{ok:true, db:"postgres"|"memory"}`.
 
 ### Texas Hold'em
 

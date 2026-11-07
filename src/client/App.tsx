@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { mergeBooks, type Book } from "../shared/book";
 import type { GameId } from "../shared/games";
+import { Classement } from "./classement";
 import { FictionalBanner } from "./disclaimer";
 import { Home } from "./home";
+import { loadLook, LookProvider, useLook } from "./look";
+import { loadBook, saveBook } from "./memory";
 import { FullscreenButton, SoundButton, TableRoom } from "./room";
 import { installSoundUnlock } from "./sound";
 import type { ServerMsg, TableView } from "./types";
@@ -11,7 +15,18 @@ function sessionKey(code: string) {
 }
 
 export function App() {
+  const look = loadLook();
+  return (
+    <LookProvider>
+      <SalonShell initialFelt={look.felt} initialBack={look.back} />
+    </LookProvider>
+  );
+}
+
+function SalonShell({ initialFelt, initialBack }: { initialFelt: string; initialBack: string }) {
+  const look = useLook();
   const [path, setPath] = useState(window.location.pathname);
+  const [book, setBook] = useState<Book>(loadBook);
   const [nickname, setNickname] = useState(localStorage.getItem("feutre.nick") || "");
   const [joinCode, setJoinCode] = useState("");
   const [view, setView] = useState<TableView | null>(null);
@@ -40,7 +55,7 @@ export function App() {
     const saved = localStorage.getItem(sessionKey(initial));
     if (!saved) return;
     const session = JSON.parse(saved) as { token: string };
-    openSocket({ t: "reconnect", code: initial, token: session.token });
+    openSocket({ t: "reconnect", code: initial, token: session.token, book: loadBook() });
     return () => {
       const current = socketRef.current;
       socketRef.current = null;
@@ -53,6 +68,7 @@ export function App() {
   function go(next: string) {
     window.history.pushState({}, "", next);
     setPath(next);
+    setError("");
   }
 
   function openSocket(first: object) {
@@ -85,6 +101,12 @@ export function App() {
         if (message.fatal) setStatus("idle");
         return;
       }
+      if ((message.t === "palmares" || message.t === "welcome" || message.t === "state") && message.board) {
+        const next = mergeBooks(loadBook(), { ranking: message.board.ranking, duels: message.board.duels });
+        saveBook(next);
+        setBook(next);
+      }
+      if (message.t === "palmares") return;
       if (message.t === "welcome") {
         codeRef.current = message.code;
         localStorage.setItem(
@@ -119,7 +141,7 @@ export function App() {
           return;
         }
         const session = JSON.parse(saved) as { token: string };
-        openSocket({ t: "reconnect", code, token: session.token });
+        openSocket({ t: "reconnect", code, token: session.token, book: loadBook() });
       }, delay);
     };
     setSocket(ws);
@@ -144,8 +166,10 @@ export function App() {
   const statusLabel =
     status === "live" ? "En ligne" : status === "reconnecting" ? "Reconnexion" : status === "connecting" ? "Connexion" : "Prêt";
 
+  const felt = look.felt || initialFelt;
+  const back = look.back || initialBack;
   return (
-    <div className="salon">
+    <div className="salon" data-felt={felt} data-back={back}>
       <a className="skip" href="#contenu">
         Aller au contenu
       </a>
@@ -157,6 +181,9 @@ export function App() {
           <p>Cartes entre amis, sans argent réel</p>
         </div>
         <div className="top-actions">
+          <button type="button" className="btn-ghost tiny" onClick={() => go(path === "/classement" ? "/" : "/classement")}>
+            Classement
+          </button>
           <SoundButton />
           <FullscreenButton />
           <span className={`dot ${status}`}>{statusLabel}</span>
@@ -168,7 +195,8 @@ export function App() {
         </p>
       ) : null}
       <main id="contenu">
-        {!view && !tableCode ? (
+        {!view && path === "/classement" ? <Classement book={book} /> : null}
+        {!view && path !== "/classement" && !tableCode ? (
           <Home
             nickname={nickname}
             setNickname={setNickname}
@@ -176,7 +204,7 @@ export function App() {
             setJoinCode={setJoinCode}
             onCreate={(game, stack) => {
               localStorage.setItem("feutre.nick", nickname.trim());
-              openSocket({ t: "create", game, nickname: nickname.trim() || "Invité", stack });
+              openSocket({ t: "create", game, nickname: nickname.trim() || "Invité", stack, book: loadBook() });
             }}
             onJoin={() => {
               const code = joinCode.trim().toUpperCase();
@@ -186,7 +214,7 @@ export function App() {
               }
               localStorage.setItem("feutre.nick", nickname.trim());
               go(`/table/${code}`);
-              openSocket({ t: "join", code, nickname: nickname.trim() || "Invité" });
+              openSocket({ t: "join", code, nickname: nickname.trim() || "Invité", book: loadBook() });
             }}
           />
         ) : null}
@@ -199,7 +227,7 @@ export function App() {
             <button
               type="button"
               className="btn-brass"
-              onClick={() => openSocket({ t: "join", code: tableCode, nickname: nickname.trim() || "Invité" })}
+              onClick={() => openSocket({ t: "join", code: tableCode, nickname: nickname.trim() || "Invité", book: loadBook() })}
             >
               Entrer à la table
             </button>

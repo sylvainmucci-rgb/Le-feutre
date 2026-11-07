@@ -2,9 +2,33 @@ import { useEffect, useRef, useState } from "react";
 import { cardKey, type Card } from "../shared/cards";
 import { gameById, type GameId } from "../shared/games";
 import { Avatar } from "./avatar";
+import { Trinket, usePerson } from "./look";
 import { PlayingCard } from "./cards";
 import { playSound } from "./sound";
 import type { TrickScene } from "./types";
+
+function TrickSeat({ seat, index }: { seat: TrickScene["seats"][number]; index: number }) {
+  const person = usePerson(seat.id);
+  return (
+    <article className={`seat seat-i${index} ${seat.isTurn ? "turn" : ""}`}>
+      {index === 0 ? null : (
+        <div className="backs" aria-hidden="true">
+          {Array.from({ length: Math.min(seat.cards, 3) }, (_, cardIndex) => (
+            <PlayingCard key={cardIndex} hidden />
+          ))}
+        </div>
+      )}
+      <div className="plate">
+        <Trinket id={person?.trinket} />
+        <Avatar name={seat.nickname} reaction={person?.reaction} />
+        <strong>{seat.nickname}</strong>
+        <span>
+          {seat.cards} cartes {seat.tags}
+        </span>
+      </div>
+    </article>
+  );
+}
 
 export function TrickTable({ view, send }: { view: TrickScene; send: (payload: object) => void }) {
   const seen = useRef<{ trick: number; result: string } | null>(null);
@@ -55,22 +79,7 @@ export function TrickTable({ view, send }: { view: TrickScene; send: (payload: o
                 ))}
               </div>
               {ordered.map((seat, index) => (
-                <article key={seat.id} className={`seat seat-i${index} ${seat.isTurn ? "turn" : ""}`}>
-                  {index === 0 ? null : (
-                    <div className="backs" aria-hidden="true">
-                      {Array.from({ length: Math.min(seat.cards, 3) }, (_, cardIndex) => (
-                        <PlayingCard key={cardIndex} hidden />
-                      ))}
-                    </div>
-                  )}
-                  <div className="plate">
-                    <Avatar name={seat.nickname} />
-                    <strong>{seat.nickname}</strong>
-                    <span>
-                      {seat.cards} cartes {seat.tags}
-                    </span>
-                  </div>
-                </article>
+                <TrickSeat key={seat.id} seat={seat} index={index} />
               ))}
             </div>
           </div>

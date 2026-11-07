@@ -6,11 +6,18 @@ export function toneFor(name: string): (typeof TONES)[number] {
   return TONES[hash % TONES.length]!;
 }
 
-export function Avatar({ name }: { name: string }) {
+export function Avatar({ name, reaction }: { name: string; reaction?: string }) {
   const letter = [...name.trim()][0]?.toUpperCase() || "?";
   return (
-    <span className={`avatar tone-${toneFor(name)}`} aria-hidden="true">
-      {letter}
+    <span className={`avatar face tone-${toneFor(name)}`}>
+      <span className="eyes" aria-hidden="true" />
+      <span className="smile" aria-hidden="true" />
+      <span className="initial">{letter}</span>
+      {reaction ? (
+        <span className="bubble" role="img" aria-label="Réaction">
+          {reaction}
+        </span>
+      ) : null}
     </span>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChatPanel } from "./chat";
 import { BeloteTable } from "./belote-table";
 import { Lobby } from "./lobby";
@@ -6,7 +6,9 @@ import { PokerTable } from "./poker-table";
 import { EveningTable, type EveningView } from "./evening-table";
 import { TrickTable } from "./trick-table";
 import type { EngineView, PokerKind, PokerView, TrickScene } from "./types";
+import { Ambiance, Confetti, CroupierLine, PeopleProvider } from "./look";
 import { playSound, setSoundOn, soundOn, subscribeSound } from "./sound";
+import type { TrinketId } from "../shared/fun";
 import type { TableView } from "./types";
 
 const POKER: readonly PokerKind[] = ["texas-holdem", "omaha", "stud", "draw"];
@@ -91,9 +93,26 @@ export function TableRoom({
   const me = view.players.find((player) => player.id === view.youId);
   const host = me?.isHost;
   const log = view.engine?.log ?? [];
+  const summary = view.engine?.result?.summary ?? "";
+  const [burst, setBurst] = useState(0);
+  const seen = useRef("");
+  useEffect(() => {
+    if (summary && summary !== seen.current) setBurst((value) => value + 1);
+    seen.current = summary;
+  }, [summary]);
   return (
+    <PeopleProvider players={view.players}>
     <section className="room" data-panel={panel}>
+      <Confetti burst={burst} />
       <div className="table-wrap">
+        <div className="parlor">
+          <div className="lamp" aria-hidden="true" />
+          <div className="bar" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </div>
+          <CroupierLine seed={`${view.code}-${summary || log.length}`} />
         {view.status === "lobby" ? (
           <Lobby view={view} link={link} host={Boolean(host)} send={send} onCopied={onCopied} />
         ) : view.engine && isPokerView(view.engine) ? (
@@ -105,6 +124,12 @@ export function TableRoom({
         ) : view.engine && isEveningView(view.engine) ? (
           <EveningTable view={view.engine} send={send} />
         ) : null}
+          <Ambiance
+            trinket={me?.trinket || "rien"}
+            onTrinket={(id: TrinketId) => send({ t: "trinket", trinket: id })}
+            onReact={(emoji) => send({ t: "react", emoji })}
+          />
+        </div>
       </div>
       <aside className="side">
         <div className="tabs">
@@ -130,5 +155,6 @@ export function TableRoom({
         </button>
       </aside>
     </section>
+    </PeopleProvider>
   );
 }

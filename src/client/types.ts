@@ -9,6 +9,8 @@ export type PlayerChip = {
   isBot: boolean;
   connected: boolean;
   isHost: boolean;
+  trinket?: string;
+  reaction?: string;
 };
 
 export type PokerLegal = {
@@ -130,8 +132,15 @@ export type TableView = {
 };
 
 export type ServerMsg =
-  | { t: "welcome"; code: string; token: string; playerId: string; view: TableView }
-  | { t: "state"; view: TableView }
+  | { t: "welcome"; code: string; token: string; playerId: string; view: TableView; board?: BookBoard }
+  | { t: "state"; view: TableView; board?: BookBoard }
   | { t: "error"; message: string; fatal?: boolean }
   | { t: "pong" }
-  | { t: "left" };
+  | { t: "left" }
+  | { t: "palmares"; board: BookBoard };
+
+export type BookBoard = {
+  note?: string;
+  ranking: { nickname: string; victories: number }[];
+  duels: { left: string; right: string; leftWins: number; rightWins: number }[];
+};

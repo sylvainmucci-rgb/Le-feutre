@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { cardFr, cardKey, suitFr, suitGlyph, SUITS, type Card, type Face, type Suit } from "../shared/cards";
 import { Avatar } from "./avatar";
 import { PlayingCard } from "./cards";
+import { Trinket, usePerson } from "./look";
 import { playSound } from "./sound";
 import type { BeloteView } from "./types";
 
@@ -16,6 +17,29 @@ function sortHand(hand: Card[], trump: Suit | null): Card[] {
     const order = trump && a.s === trump ? TRUMP_ORDER : PLAIN_ORDER;
     return order.indexOf(a.r) - order.indexOf(b.r);
   });
+}
+
+function BeloteSeat({ seat, index }: { seat: BeloteView["seats"][number]; index: number }) {
+  const person = usePerson(seat.id);
+  return (
+    <article className={`seat seat-i${index} ${seat.isTurn ? "turn" : ""}`}>
+      {index === 0 ? null : (
+        <div className="backs" aria-hidden="true">
+          {Array.from({ length: Math.min(seat.cards, 4) }, (_, cardIndex) => (
+            <PlayingCard key={cardIndex} hidden />
+          ))}
+        </div>
+      )}
+      <div className="plate">
+        <Trinket id={person?.trinket} />
+        <Avatar name={seat.nickname} reaction={person?.reaction} />
+        <strong>{seat.nickname}</strong>
+        <span>
+          {seat.cards} cartes {seat.isDealer ? "· donneur" : ""} {seat.isTaker ? "· preneur" : ""}
+        </span>
+      </div>
+    </article>
+  );
 }
 
 export function BeloteTable({ view, send }: { view: BeloteView; send: (payload: object) => void }) {
@@ -66,22 +90,7 @@ export function BeloteTable({ view, send }: { view: BeloteView; send: (payload: 
                 {view.knownTakerCard ? <p className="known">Carte connue du preneur : {cardFr(view.knownTakerCard)}</p> : null}
               </div>
               {order.map((seat, index) => (
-                <article key={seat.id} className={`seat seat-i${index} ${seat.isTurn ? "turn" : ""}`}>
-                  {index === 0 ? null : (
-                    <div className="backs" aria-hidden="true">
-                      {Array.from({ length: Math.min(seat.cards, 4) }, (_, cardIndex) => (
-                        <PlayingCard key={cardIndex} hidden />
-                      ))}
-                    </div>
-                  )}
-                  <div className="plate">
-                    <Avatar name={seat.nickname} />
-                    <strong>{seat.nickname}</strong>
-                    <span>
-                      {seat.cards} cartes {seat.isDealer ? "· donneur" : ""} {seat.isTaker ? "· preneur" : ""}
-                    </span>
-                  </div>
-                </article>
+                <BeloteSeat key={seat.id} seat={seat} index={index} />
               ))}
             </div>
           </div>

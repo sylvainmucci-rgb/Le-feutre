@@ -1,4 +1,5 @@
 import { Pool, type PoolConfig } from "pg";
+import { mergeBooks, sanitizeBook, type Book } from "../shared/book";
 
 /**
  * Palmarès, duels, recaves et éliminations.
@@ -187,12 +188,44 @@ export function recordEvent(event: TableEvent) {
   );
 }
 
+export function currentBook(): Book {
+  return {
+    ranking: [...wins.entries()].map(([nickname, victories]) => ({ nickname, victories })),
+    duels: [...duels.values()],
+  };
+}
+
+/** Reconstruit le classement avec le carnet d'un navigateur. On prend le maximum, pas la somme. */
+export function mergeIncoming(value: unknown) {
+  const merged = mergeBooks(currentBook(), sanitizeBook(value));
+  wins.clear();
+  for (const line of merged.ranking) wins.set(line.nickname, line.victories);
+  duels.clear();
+  for (const duel of merged.duels) duels.set(`${duel.left}|${duel.right}`, { ...duel });
+  for (const line of merged.ranking) {
+    void safeQuery(
+      `INSERT INTO feutre_ranking (nickname, victories) VALUES ($1, $2)
+       ON CONFLICT (nickname) DO UPDATE SET victories = GREATEST(feutre_ranking.victories, EXCLUDED.victories)`,
+      [line.nickname, line.victories],
+    );
+  }
+  for (const duel of merged.duels) {
+    void safeQuery(
+      `INSERT INTO feutre_duel (left_name, right_name, left_wins, right_wins) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (left_name, right_name) DO UPDATE
+       SET left_wins = GREATEST(feutre_duel.left_wins, EXCLUDED.left_wins),
+           right_wins = GREATEST(feutre_duel.right_wins, EXCLUDED.right_wins)`,
+      [duel.left, duel.right, duel.leftWins, duel.rightWins],
+    );
+  }
+}
+
 export function palmaresSnapshot() {
   return {
     note:
       mode === "postgres"
         ? "Palmarès, duels, recaves et éliminations sont gardés dans Postgres. Aucun gain réel."
-        : "Palmarès gardé en mémoire seulement. DATABASE_URL absente ou injoignable. Aucun gain réel.",
+        : "Classement gardé dans chaque navigateur et remis en mémoire à la table. DATABASE_URL absente ou injoignable. Aucun gain réel.",
     ranking: [...wins.entries()]
       .map(([nickname, victories]) => ({ nickname, victories }))
       .sort((a, b) => b.victories - a.victories || a.nickname.localeCompare(b.nickname, "fr"))
