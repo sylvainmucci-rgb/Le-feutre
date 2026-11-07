@@ -2,7 +2,7 @@
 
 Belote classique et Texas Hold'em entre amis, gratuitement. Aucun argent réel, aucun achat, aucune publicité, aucun compte. Un pseudonyme et un code de table suffisent.
 
-Ce dépôt est un prototype jouable en local. Il n'est pas publié : il n'y a pas d'adresse publique de partie.
+Le salon est servi sur [https://le-feutre.onrender.com](https://le-feutre.onrender.com) (offre Render gratuite). Chaque table reste privée : il faut son code. Les dollars du Hold'em sont fictifs et n'ont aucune valeur réelle.
 
 ## Lancer en local
 
@@ -58,6 +58,10 @@ Règles de la Fédération Française de Belote du 27 janvier 2016, sans annonce
 - Un automate peut occuper un siège libre. Il ne voit que sa vue de joueur.
 
 Le serveur fait autorité. La vue envoyée à un joueur ne contient pas le talon ni les cartes cachées des autres. À l'abattage du Hold'em, seules les mains encore en jeu sont révélées.
+
+## Le salon
+
+La table est un ovale de feutre vert, avec un bourrelet de cuir et un bord de bois. Les cartes, les dos et les jetons sont dessinés pour Le Feutre : rien n'est repris d'un jeu commercial. Les sons sont synthétisés dans le navigateur et se coupent avec le bouton « Sons ». L'écran s'adapte au téléphone (portrait et paysage), à l'ordinateur et au plein écran d'un téléviseur.
 
 ## PWA
 

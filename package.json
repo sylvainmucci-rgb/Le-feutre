@@ -10,7 +10,7 @@
     "dev": "NODE_ENV=development tsx src/server/main.ts",
     "build": "node scripts/make-icons.mjs && vite build",
     "start": "NODE_ENV=production tsx src/server/main.ts",
-    "test": "tsx --test --test-force-exit tests/poker-evaluate.test.ts tests/poker-pots.test.ts tests/belote.test.ts tests/visibility-chat.test.ts",
+    "test": "tsx --test --test-force-exit tests/poker-evaluate.test.ts tests/poker-pots.test.ts tests/belote.test.ts tests/visibility-chat.test.ts tests/salon.test.ts",
     "typecheck": "tsc --noEmit",
     "icons": "node scripts/make-icons.mjs"
   },
