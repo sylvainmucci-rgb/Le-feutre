@@ -499,6 +499,26 @@ html:fullscreen .holes .playing-card { width: 120px; }
 html:fullscreen .center .playing-card { width: 104px; }
 html:fullscreen .side { font-size: 1.05rem; }
 
+.ranking { margin: 0.4rem 0 0; padding-left: 1.1rem; }
+.tv-number {
+  margin: 0.6rem auto; text-align: center; width: min(100%, 280px);
+  background: radial-gradient(circle at 50% 40%, #f6f1e6, #d7c4a2);
+  color: #1b1714; border-radius: 28px; padding: 0.8rem 1rem 1rem;
+  box-shadow: 0 16px 30px rgba(0,0,0,0.35);
+}
+.tv-number strong { display: block; font-size: clamp(4rem, 12vw, 7rem); line-height: 0.9; font-family: Palatino, Georgia, serif; }
+.tv-number p { margin: 0.2rem 0; }
+.tv-number.wheel.red { background: radial-gradient(circle at 50% 40%, #f3d0d0, #8e2430); color: #fff8f6; }
+.tv-number.wheel.black { background: radial-gradient(circle at 50% 40%, #4a4a4a, #111); color: #fff; }
+.tv-number.wheel.green { background: radial-gradient(circle at 50% 40%, #d8f3e4, #0e6a40); color: #fff; }
+.loto-card { display: grid; gap: 0.35rem; margin: 0.8rem 0; }
+.loto-row { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.loto-row span {
+  min-width: 2.4rem; text-align: center; padding: 0.35rem 0.4rem; border-radius: 8px;
+  background: #f6f1e6; color: #1b1714; font-weight: 700;
+}
+.loto-row span.hit { background: #c6a15a; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation: none !important;

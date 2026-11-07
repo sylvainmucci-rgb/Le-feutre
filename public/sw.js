@@ -1,7 +1,7 @@
 /* Le Feutre — réseau d'abord.
    Ne met jamais en cache les WebSockets : un service worker n'intercepte pas ws/wss.
    HTML, manifeste et ce fichier lui-même restent revalidés par le serveur (Cache-Control: no-cache). */
-const VERSION = "feutre-v3";
+const VERSION = "feutre-v4";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());

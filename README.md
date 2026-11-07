@@ -27,7 +27,7 @@ npm start
 
 ## Ce qui se joue
 
-Hold'em no-limit, Omaha pot-limit, stud, poker fermé, belote, coinche couleur, tarot, manille muette, écarté et bataille corse. Les dollars de poker sont fictifs. Trois recaves au montant initial, puis élimination.
+Hold'em no-limit, Omaha pot-limit, stud, poker fermé, belote, coinche couleur, tarot, manille muette, écarté et bataille corse. Les dollars de poker sont fictifs. Trois recaves au montant initial, puis élimination. Le coin soirée ajoute un loto affichable sur téléviseur, une roulette européenne et un blackjack, tous en jetons fictifs, plus un palmarès et des duels gardés en mémoire.
 
 ### Texas Hold'em
 

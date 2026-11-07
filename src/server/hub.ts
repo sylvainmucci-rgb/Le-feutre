@@ -9,6 +9,7 @@ import { CHAT_HISTORY, pushChat, type ChatMessage } from "../shared/chat";
 import { isGameId, type GameId } from "../shared/games";
 import { mulberry32, type Rng } from "../shared/rng";
 import { stakesForBuyIn, type HoldemBuyIn } from "../shared/poker/holdem";
+import { palmaresSnapshot, recordOutcome, winnersFrom } from "./palmares";
 
 export type TableView = {
   code: string;
@@ -55,6 +56,7 @@ type Table = {
   botTimer?: ReturnType<typeof setTimeout>;
   continueTimer?: ReturnType<typeof setTimeout>;
   disconnectTimers: Map<string, ReturnType<typeof setTimeout>>;
+  scored: boolean;
 };
 
 type ClientMsg = {
@@ -146,7 +148,20 @@ export function viewFor(table: Table, playerId: string): TableView {
   };
 }
 
+function noteScore(table: Table) {
+  if (!table.engine || table.engine.phase !== "match-over") {
+    table.scored = false;
+    return;
+  }
+  if (table.scored) return;
+  const outcome = winnersFrom(table.engine);
+  if (!outcome || outcome.winners.length === 0) return;
+  table.scored = true;
+  recordOutcome(outcome.winners, outcome.losers);
+}
+
 function emit(table: Table) {
+  noteScore(table);
   for (const player of table.players) {
     if (!player.socket) continue;
     try {
@@ -292,6 +307,7 @@ export function createTable(input: {
     botDelayMs: input.botDelayMs,
     continueMs: input.continueMs,
     disconnectTimers: new Map(),
+    scored: false,
   };
   tables.set(table.code, table);
   return { table, player };
@@ -527,6 +543,11 @@ export async function startServer(options?: { port?: number; botDelayMs?: number
     if (url.pathname === "/health") {
       res.writeHead(200, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" });
       res.end("ok");
+      return;
+    }
+    if (url.pathname === "/palmares") {
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+      res.end(JSON.stringify(palmaresSnapshot()));
       return;
     }
     if (vite) {

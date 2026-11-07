@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PLAYABLE_GAMES, type GameId } from "../shared/games";
 import { formatDollars, stakesForBuyIn, type HoldemBuyIn } from "../shared/poker/holdem";
 import { PlayingCard } from "./cards";
@@ -20,6 +20,19 @@ export function Home({
   onJoin: () => void;
 }) {
   const [buyIn, setBuyIn] = useState<HoldemBuyIn>(1000);
+  const [board, setBoard] = useState<{ note: string; ranking: { nickname: string; victories: number }[]; duels: { left: string; right: string; leftWins: number; rightWins: number }[] } | null>(null);
+  useEffect(() => {
+    let gone = false;
+    fetch("/palmares")
+      .then((response) => response.json())
+      .then((data) => {
+        if (!gone) setBoard(data);
+      })
+      .catch(() => undefined);
+    return () => {
+      gone = true;
+    };
+  }, []);
   return (
     <section className="home">
       <div className="hero-copy">
@@ -70,7 +83,7 @@ export function Home({
         </fieldset>
         <p className="note">Dollars sans valeur réelle. Les blinds ne doublent pas. Hold&apos;em no-limit, Omaha pot-limit.</p>
       </section>
-      {(["Poker", "Plis", "Table"] as const).map((group) => (
+      {(["Poker", "Plis", "Table", "Soirée"] as const).map((group) => (
         <section key={group}>
           <h2>{group}</h2>
           <div className="choices">
@@ -87,6 +100,30 @@ export function Home({
           </div>
         </section>
       ))}
+      {board && (board.ranking.length > 0 || board.duels.length > 0) ? (
+        <section className="invite">
+          <h2>Palmarès</h2>
+          <p className="note">{board.note}</p>
+          {board.ranking.length > 0 ? (
+            <ol className="ranking">
+              {board.ranking.map((row) => (
+                <li key={row.nickname}>
+                  {row.nickname} · {row.victories}
+                </li>
+              ))}
+            </ol>
+          ) : null}
+          {board.duels.length > 0 ? (
+            <ul className="ranking">
+              {board.duels.map((duel) => (
+                <li key={`${duel.left}-${duel.right}`}>
+                  {duel.left} {duel.leftWins}–{duel.rightWins} {duel.right}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      ) : null}
       <form
         className="join"
         onSubmit={(event) => {

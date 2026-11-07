@@ -114,7 +114,7 @@ export type TrickScene = {
   teams?: string[];
 };
 
-export type EngineView = PokerView | BeloteView | TrickScene;
+export type EngineView = PokerView | BeloteView | TrickScene | import("./evening-table").EveningView;
 
 export type TableView = {
   code: string;

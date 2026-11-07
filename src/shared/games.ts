@@ -103,6 +103,36 @@ export const PLAYABLE_GAMES = [
     stack: false,
     summary: "Cartes retournées ensemble, l'as mène. Égalité : bataille. Donnes courtes, partie en 5.",
   },
+  {
+    id: "loto",
+    name: "Loto",
+    group: "Soirée",
+    players: "1 à 6",
+    min: 1,
+    max: 6,
+    stack: false,
+    summary: "Tirage de 1 à 90, quine et carton. Pensé pour un téléviseur. Rien à gagner.",
+  },
+  {
+    id: "roulette",
+    name: "Roulette",
+    group: "Soirée",
+    players: "1 à 6",
+    min: 1,
+    max: 6,
+    stack: false,
+    summary: "Roulette européenne, 100 jetons fictifs. Aucun achat, le zéro est vert.",
+  },
+  {
+    id: "blackjack",
+    name: "Blackjack",
+    group: "Soirée",
+    players: "1 à 5",
+    min: 1,
+    max: 5,
+    stack: false,
+    summary: "Contre le croupier, qui s'arrête à 17. Jetons fictifs, aucun gain réel.",
+  },
 ] as const;
 
 export type GameId = (typeof PLAYABLE_GAMES)[number]["id"];

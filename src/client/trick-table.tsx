@@ -83,7 +83,7 @@ export function TrickTable({ view, send }: { view: TrickScene; send: (payload: o
       ) : null}
       {view.prompts.length > 0 ? (
         <div className="actions">
-          {view.prompts.slice(0, 12).map((prompt) => (
+          {view.prompts.map((prompt) => (
             <button key={prompt.label} type="button" className="btn-brass" onClick={() => send({ t: "action", action: prompt.action })}>
               {prompt.label}
             </button>

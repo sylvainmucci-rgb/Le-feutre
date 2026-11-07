@@ -18,6 +18,25 @@ import { chooseCoinche, applyCoinche, actorCoinche, continueCoinche, createCoinc
 import { chooseEcarte, applyEcarte, actorEcarte, continueEcarte, createEcarte, hiddenEcarte, projectEcarte, type EcarteAction, type EcarteState } from "./plis/ecarte";
 import { chooseManille, applyManille, actorManille, continueManille, createManille, hiddenManille, projectManille, type ManilleAction, type ManilleState } from "./plis/manille";
 import { chooseTarot, applyTarot, actorTarot, continueTarot, createTarot, hiddenTarot, projectTarot, type TarotAction, type TarotState } from "./plis/tarot";
+import { applyLoto, chooseLoto, continueLoto, createLoto, hiddenLoto, projectLoto, type LotoAction, type LotoState } from "./evening/loto";
+import {
+  actorBlackjack,
+  applyBlackjack,
+  applyRoulette,
+  chooseBlackjack,
+  chooseRoulette,
+  continueBlackjack,
+  continueRoulette,
+  createBlackjack,
+  createRoulette,
+  hiddenBlackjack,
+  projectBlackjack,
+  projectRoulette,
+  type BlackjackAction,
+  type BlackjackState,
+  type RouletteAction,
+  type RouletteState,
+} from "./evening/casino";
 import { chooseDraw, applyDraw, actorDraw, continueDraw, createDraw, hiddenDraw, projectDraw, rebuyDraw, type DrawAction, type DrawState } from "./poker/draw";
 import { choosePokerAction } from "./poker/bot";
 import {
@@ -34,7 +53,20 @@ import {
 import { chooseOmaha, applyOmaha, actorOmaha, continueOmaha, createOmaha, hiddenOmaha, projectOmaha, rebuyOmaha, type OmahaState } from "./poker/omaha";
 import { chooseStud, applyStud, actorStud, continueStud, createStud, hiddenStud, projectStud, rebuyStud, type StudState } from "./poker/stud";
 
-export type AnyEngine = HoldemState | BeloteState | OmahaState | DrawState | StudState | CoincheState | ManilleState | EcarteState | BatailleState | TarotState;
+export type AnyEngine =
+  | HoldemState
+  | BeloteState
+  | OmahaState
+  | DrawState
+  | StudState
+  | CoincheState
+  | ManilleState
+  | EcarteState
+  | BatailleState
+  | TarotState
+  | LotoState
+  | RouletteState
+  | BlackjackState;
 
 type Seat = { id: string; nickname: string; isBot?: boolean };
 
@@ -195,6 +227,42 @@ export function moduleFor(id: GameId): Module {
         hidden: (state, playerId) => hiddenTarot(state as TarotState, playerId),
         bot: (view) => chooseTarot(view as never),
         fallback: (view) => cardAction(view as { legalCards?: Card[]; prompts?: { action: object }[] }, "play"),
+      };
+    case "loto":
+      return {
+        ...common,
+        create: (seats, rng) => createLoto(seats, rng),
+        apply: (state, playerId, action, rng) => applyLoto(state as LotoState, playerId, action as LotoAction, rng),
+        continue: (state, rng) => continueLoto(state as LotoState, rng),
+        actor: () => null,
+        project: (state, playerId) => projectLoto(state as LotoState, playerId),
+        hidden: () => hiddenLoto(),
+        bot: () => chooseLoto(),
+        fallback: () => chooseLoto(),
+      };
+    case "roulette":
+      return {
+        ...common,
+        create: (seats) => createRoulette(seats),
+        apply: (state, playerId, action, rng) => applyRoulette(state as RouletteState, playerId, action as RouletteAction, rng),
+        continue: (state) => continueRoulette(state as RouletteState),
+        actor: () => null,
+        project: (state, playerId) => projectRoulette(state as RouletteState, playerId),
+        hidden: () => [],
+        bot: (view) => chooseRoulette(view as never),
+        fallback: () => ({ type: "spin" }),
+      };
+    case "blackjack":
+      return {
+        ...common,
+        create: (seats, rng) => createBlackjack(seats, rng),
+        apply: (state, playerId, action) => applyBlackjack(state as BlackjackState, playerId, action as BlackjackAction),
+        continue: (state, rng) => continueBlackjack(state as BlackjackState, rng),
+        actor: (state) => actorBlackjack(state as BlackjackState),
+        project: (state, playerId) => projectBlackjack(state as BlackjackState, playerId),
+        hidden: (state, playerId) => hiddenBlackjack(state as BlackjackState, playerId),
+        bot: (view) => chooseBlackjack(view as never),
+        fallback: () => ({ type: "stand" }),
       };
     default:
       throw new Error("Ce jeu n'est pas disponible.");
