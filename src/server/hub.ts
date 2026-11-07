@@ -571,11 +571,13 @@ function serveStatic(req: IncomingMessage, res: ServerResponse, url: URL) {
     ".svg": "image/svg+xml",
     ".png": "image/png",
     ".webmanifest": "application/manifest+json",
+    ".json": "application/json; charset=utf-8",
   };
   const immutable = file.includes(`${path.sep}assets${path.sep}`);
+  const shell = ext === ".html" || relative === "sw.js" || relative === "version.json";
   res.writeHead(200, {
     "content-type": types[ext] ?? "application/octet-stream",
-    "cache-control": immutable ? "public, max-age=31536000, immutable" : "no-cache",
+    "cache-control": shell ? "no-store" : immutable ? "public, max-age=31536000, immutable" : "no-cache",
     "x-content-type-options": "nosniff",
     "content-security-policy":
       "default-src 'self'; connect-src 'self' ws: wss:; img-src 'self' data:; style-src 'self'; script-src 'self'; manifest-src 'self'",

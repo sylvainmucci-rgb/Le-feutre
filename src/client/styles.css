@@ -207,6 +207,13 @@ input[type="text"], input:not([type]), input[type="search"] {
   font-size: 0.92rem;
 }
 .board, .holes, .trick { display: flex; gap: 0.4rem; justify-content: center; align-items: center; flex-wrap: wrap; }
+.holes { flex-wrap: nowrap; }
+.slot {
+  width: 42px; aspect-ratio: 5 / 7; border-radius: 6px;
+  border: 1px dashed rgba(246, 241, 230, 0.45); background: rgba(0, 0, 0, 0.18);
+}
+.dock-main, .dock-size { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; width: 100%; }
+.dock-main > button { flex: 1 1 6rem; }
 .waiting-cards { margin: 0.2rem 0; color: rgba(246, 241, 230, 0.8); font-size: 0.92rem; }
 .felt-head, .actions, .row, .share { display: flex; flex-wrap: wrap; gap: 0.55rem; align-items: center; }
 .felt-head { justify-content: space-between; margin-bottom: 0.45rem; }
@@ -644,6 +651,85 @@ html:fullscreen .side { font-size: 1.05rem; }
   .classement .board-grid { grid-template-columns: 1fr; }
   .parlor { padding-top: 1.4rem; }
   .croupier { font-size: 0.85rem; }
+}
+@media (max-width: 430px) {
+  .salon:has(.play) { height: 100dvh; min-height: 0; overflow: hidden; }
+  .topbar { padding: 0.2rem 0.45rem; gap: 0.35rem; }
+  .brand { font-size: 1.15rem; }
+  .salon:has(.play) .brand-lockup p { display: block; font-size: 0.68rem; line-height: 1.1; }
+  .top-actions { flex-wrap: nowrap; gap: 0.25rem; }
+  .top-actions .tiny { min-height: 32px; padding: 0.2rem 0.45rem; }
+  .salon:has(.play) .dot { display: none; }
+  .salon:has(.play) .legal { display: none; }
+  .salon:has(.play) main { width: 100%; margin: 0; padding: 0; flex: 1; min-height: 0; overflow: hidden; }
+  .room { height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 0; position: relative; }
+  .side { display: contents; }
+  .tabs { order: -1; flex: 0 0 auto; padding: 0.15rem 0.35rem 0; }
+  .tabs button { min-height: 32px; padding: 0.15rem 0.4rem; font-size: 0.78rem; }
+  .room[data-panel="table"] .history,
+  .room[data-panel="table"] .chat,
+  .room[data-panel="table"] .side > .btn-ghost,
+  .room[data-panel="table"] > .btn-ghost { display: none; }
+  .room[data-panel="table"] .table-wrap { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+  .room[data-panel="history"] .table-wrap,
+  .room[data-panel="chat"] .table-wrap { display: none; }
+  .room[data-panel="history"] .history,
+  .room[data-panel="chat"] .chat { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto; }
+  .parlor {
+    height: 100%; min-height: 0; display: flex; flex-direction: column;
+    padding: 0.15rem 0.3rem 0; border-radius: 0;
+  }
+  .lamp, .bar, .croupier, .ambiance, .watermark, .fictional { display: none; }
+  .play {
+    flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
+    padding-bottom: 0; margin: 0;
+  }
+  .play:has(.action-dock), .play:has(.pre-actions) { padding-bottom: calc(6.7rem + env(safe-area-inset-bottom, 0px)); }
+  .play:has(.actions) { padding-bottom: calc(3.4rem + env(safe-area-inset-bottom, 0px)); }
+  .felt-head { margin: 0; gap: 0.3rem; font-size: 0.78rem; flex: 0 0 auto; }
+  .play .stage { flex: 1 1 auto; min-height: 240px; display: flex; flex-direction: column; }
+  .play .rail, .play .cushion { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .play .rail { padding: 9px; }
+  .play .cushion { padding: 7px; }
+  .play .felt { flex: 1; min-height: 220px; height: auto; border-radius: 50%; overflow: visible; }
+  .center { width: min(92%, 280px); gap: 0.2rem; }
+  .center .stack { display: none; }
+  .plaque { font-size: 0.95rem; padding: 0.12rem 0.5rem; }
+  .board.slots { flex-wrap: nowrap; gap: 0.18rem; }
+  .center .playing-card, .slot { width: 34px; }
+  .seat { width: auto; }
+  .seat .backs, .seat .trinket, .seat .plate strong, .seat .tags { display: none; }
+  .seat .plate {
+    width: auto; padding: 0; border: 0; background: transparent; box-shadow: none; border-radius: 0;
+  }
+  .seat .avatar { width: 2.15rem; height: 2.15rem; margin: 0; }
+  .seat .plate span { font-size: 0.62rem; color: #fffaf0; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8); }
+  .hero-dock {
+    flex: 0 0 auto; flex-direction: row; align-items: center; justify-content: center;
+    gap: 0.45rem; margin: 0.15rem 0 0; width: 100%;
+  }
+  .hero-plate { padding: 0.2rem 0.45rem; }
+  .hero-plate .tags, .hero-plate .trinket { display: none; }
+  .hero-plate span { font-size: 0.78rem; }
+  .holes { flex-wrap: nowrap; gap: 0.35rem; }
+  .holes .playing-card { width: 68px; }
+  .fan { min-height: 0; padding: 0.15rem 0 0.25rem; flex: 0 0 auto; }
+  .fan .playing-card { width: 48px; }
+  .action-dock, .pre-actions, .actions {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    border-radius: 14px 14px 0 0; margin: 0;
+    padding: 0.35rem 0.4rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
+    background: rgba(36, 20, 12, 0.97);
+  }
+  .action-dock { display: flex; flex-direction: column; gap: 0.28rem; }
+  .dock-main { flex-wrap: nowrap; }
+  .dock-main > button { min-height: 40px; padding: 0.35rem 0.4rem; font-size: 0.82rem; }
+  .dock-size { flex-wrap: nowrap; }
+  .dock-size label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .quick { flex: 1; flex-wrap: nowrap; }
+  .quick button { flex: 1; min-height: 34px; padding: 0.15rem 0.15rem; font-size: 0.72rem; }
+  .dock-size input[type="range"] { width: 72px; flex: 0 0 72px; }
+  .banner { margin: 0.15rem 0; padding: 0.35rem 0.5rem; font-size: 0.78rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

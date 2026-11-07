@@ -8,9 +8,9 @@
   },
   "scripts": {
     "dev": "NODE_ENV=development tsx src/server/main.ts",
-    "build": "node scripts/make-icons.mjs && vite build",
+    "build": "node scripts/make-icons.mjs && vite build && node scripts/stamp-sw.mjs",
     "start": "NODE_ENV=production tsx src/server/main.ts",
-    "test": "tsx --test --test-force-exit tests/poker-evaluate.test.ts tests/poker-pots.test.ts tests/belote.test.ts tests/visibility-chat.test.ts tests/salon.test.ts tests/variants.test.ts tests/plis.test.ts tests/evening.test.ts tests/rules-extra.test.ts tests/store.test.ts tests/book.test.ts tests/bet-size.test.ts",
+    "test": "tsx --test --test-force-exit tests/poker-evaluate.test.ts tests/poker-pots.test.ts tests/belote.test.ts tests/visibility-chat.test.ts tests/salon.test.ts tests/variants.test.ts tests/plis.test.ts tests/evening.test.ts tests/rules-extra.test.ts tests/store.test.ts tests/book.test.ts tests/bet-size.test.ts tests/sw.test.ts",
     "typecheck": "tsc --noEmit",
     "icons": "node scripts/make-icons.mjs"
   },

@@ -118,12 +118,17 @@ export function PokerTable({ view, send, youId }: { view: PokerView; send: (payl
               <div className="center">
                 <ChipStack cents={view.pot} caption={`Pot fictif ${formatDollars(view.pot)}`} />
                 <p className="plaque">Pot {formatDollars(view.pot)} · fictif</p>
-                <div className="board">
-                  {view.board.length === 0 ? (
-                    <p className="waiting-cards">Cartes communes à venir</p>
-                  ) : (
-                    view.board.map((card) => <PlayingCard key={`${card.r}${card.s}`} card={card} />)
-                  )}
+                <div className="board slots" aria-label="Cartes communes">
+                  {view.kind === "texas-holdem" || view.kind === "omaha"
+                    ? Array.from({ length: 5 }, (_, index) => {
+                        const card = view.board[index];
+                        return card ? (
+                          <PlayingCard key={`${card.r}${card.s}`} card={card} />
+                        ) : (
+                          <span key={`slot-${index}`} className="slot" aria-hidden="true" />
+                        );
+                      })
+                    : view.board.map((card) => <PlayingCard key={`${card.r}${card.s}`} card={card} />)}
                 </div>
               </div>
               {ordered.map((seat, index) =>
@@ -228,26 +233,34 @@ export function PokerTable({ view, send, youId }: { view: PokerView; send: (payl
       ) : null}
       {legal ? (
         <div className="action-dock">
-          {legal.fold ? (
-            <button type="button" className="btn-ghost" disabled={Boolean(pending)} onClick={() => act({ type: "fold" }, "Couché")}>
-              Se coucher
-            </button>
-          ) : (
-            <span />
-          )}
-          {legal.check ? (
-            <button type="button" className="btn-brass" disabled={Boolean(pending)} onClick={() => act({ type: "check" }, "Checker")}>
-              Checker
-            </button>
-          ) : legal.call !== null ? (
-            <button type="button" className="btn-brass" disabled={Boolean(pending)} onClick={() => act({ type: "call" }, `Suivre ${formatDollars(legal.call ?? 0)}`)}>
-              Suivre {formatDollars(legal.call ?? 0)}
-            </button>
-          ) : (
-            <span />
-          )}
+          <div className="dock-main">
+            {legal.fold ? (
+              <button type="button" className="btn-ghost" disabled={Boolean(pending)} onClick={() => act({ type: "fold" }, "Couché")}>
+                Se coucher
+              </button>
+            ) : null}
+            {legal.check ? (
+              <button type="button" className="btn-brass" disabled={Boolean(pending)} onClick={() => act({ type: "check" }, "Checker")}>
+                Checker
+              </button>
+            ) : legal.call !== null ? (
+              <button type="button" className="btn-brass" disabled={Boolean(pending)} onClick={() => act({ type: "call" }, `Suivre ${formatDollars(legal.call ?? 0)}`)}>
+                Suivre {formatDollars(legal.call ?? 0)}
+              </button>
+            ) : null}
+            {legal.raise ? (
+              <button
+                type="button"
+                className="btn-brass"
+                disabled={Boolean(pending)}
+                onClick={() => act({ type: "bet", amount: clampRaise(amount, legal.raise!.minTo, legal.raise!.maxTo) }, legal.raise!.short ? "Tapis" : "Relance")}
+              >
+                {legal.raise.short ? `Tapis ${formatDollars(legal.raise.maxTo)}` : view.you.toCall > 0 ? "Relancer" : "Miser"}
+              </button>
+            ) : null}
+          </div>
           {legal.raise ? (
-            <div className="raise">
+            <div className="dock-size">
               <div className="quick">
                 <button type="button" onClick={() => jump("min")}>Min</button>
                 <button type="button" onClick={() => jump(1 / 2)}>1/2</button>
@@ -266,14 +279,6 @@ export function PokerTable({ view, send, youId }: { view: PokerView; send: (payl
                 value={clampRaise(amount, legal.raise.minTo, legal.raise.maxTo)}
                 onChange={(event) => setAmount(Number(event.target.value))}
               />
-              <button
-                type="button"
-                className="btn-brass"
-                disabled={Boolean(pending)}
-                onClick={() => act({ type: "bet", amount: clampRaise(amount, legal.raise!.minTo, legal.raise!.maxTo) }, legal.raise!.short ? "Tapis" : "Relance")}
-              >
-                {legal.raise.short ? `Tapis ${formatDollars(legal.raise.maxTo)}` : view.you.toCall > 0 ? "Relancer" : "Miser"}
-              </button>
             </div>
           ) : null}
         </div>
@@ -289,7 +294,7 @@ export function PokerTable({ view, send, youId }: { view: PokerView; send: (payl
 function SeatPlate({ seat, index, win }: { seat: PokerSeat; index: number; win: boolean }) {
   const person = usePerson(seat.id);
   return (
-    <article className={`seat seat-i${index} ${seat.isTurn ? "turn" : ""} ${seat.folded ? "folded" : ""} ${win ? "win" : ""}`}>
+    <article className={`seat seat-i${index} ${seat.isTurn ? "turn" : ""} ${seat.folded ? "folded" : ""} ${win ? "win" : ""}`} aria-label={seat.nickname}>
       <div className="backs">
         {(seat.up ?? []).map((card) => (
           <PlayingCard key={`${card.r}${card.s}${seat.id}`} card={card} />
