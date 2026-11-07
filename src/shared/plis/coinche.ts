@@ -1,25 +1,32 @@
 import { beloteDeck, cardFr, cardKey, sameCard, suitFr, SUITS, type Card, type Suit } from "../cards";
 import { shuffle, type Rng } from "../rng";
-import { cardPoints, legalPlays, winningIndex, type TrickPlay } from "../belote/engine";
+import { legalPlays, winningIndex, type TrickPlay } from "../belote/engine";
 
 /**
- * Coinche couleur, usage de comptoir.
- * Les huit cartes sont données avant l'enchère (la donne en plusieurs paquets
- * ne change pas la main finale ; elle n'est pas distinguée ici).
- * Enchères 80 à 160 de dix en dix, puis capot 250. Couleur seulement :
- * le sans-atout et le tout-atout ne sont pas dans cette version.
+ * Coinche de comptoir.
+ * Les huit cartes sont données avant l'enchère.
+ * Enchères 80 à 160 de dix en dix, puis capot 250.
+ * À valeur égale : couleur < tout-atout < sans-atout.
+ * Couleur : ordre et points de la belote (atout valet, 9, as…).
+ * Tout-atout : chaque couleur se joue comme un atout ; seule la couleur demandée gagne le pli,
+ * et il faut monter si l'on peut. Points d'atout. Belote possible dans chaque couleur.
+ * Sans-atout : ordre as, 10, roi, dame, valet, 9, 8, 7. Points ordinaires (as 11, valet 2).
+ * Pas de belote. Pas d'obligation de monter.
  * Trois passes après une enchère ferment les enchères. Tout le monde passe : on redonne.
- * La coinche double, la surcoinche quadruple. Le preneur doit atteindre son contrat
- * en points de cartes (belote et dix de der compris). Réussite : le camp marque le contrat
- * multiplié. Chute : la défense le marque. La belote (20) s'ajoute ensuite, sans multiplicateur.
- * Partie en 1 000. Les plis suivent la belote classique.
+ * La coinche double, la surcoinche quadruple. Partie en 1 000.
  */
 
 const LADDER = [80, 90, 100, 110, 120, 130, 140, 150, 160, 250];
+const PLAIN_ORDER = [14, 10, 13, 12, 11, 9, 8, 7];
+const TRUMP_ORDER = [11, 9, 14, 10, 13, 12, 8, 7];
+const PLAIN_POINTS: Record<number, number> = { 14: 11, 10: 10, 13: 4, 12: 3, 11: 2, 9: 0, 8: 0, 7: 0 };
+const TRUMP_POINTS: Record<number, number> = { 11: 20, 9: 14, 14: 11, 10: 10, 13: 4, 12: 3, 8: 0, 7: 0 };
+
+export type CoincheMode = "color" | "ta" | "sa";
 
 export type CoincheAction =
   | { type: "pass" }
-  | { type: "bid"; suit: Suit; value: number }
+  | { type: "bid"; value: number; suit?: Suit; mode?: "ta" | "sa" }
   | { type: "coinche" }
   | { type: "surcoinche" }
   | { type: "play"; card: Card };
@@ -33,6 +40,7 @@ export type CoincheState = {
   turn: number;
   phase: "bid" | "play" | "scoring" | "match-over";
   trump: Suit | null;
+  mode: CoincheMode | null;
   contract: number | null;
   taker: number | null;
   coinche: 0 | 1 | 2;
@@ -41,8 +49,7 @@ export type CoincheState = {
   won: [Card[], Card[]];
   tricksWon: [number, number];
   lastTrick: 0 | 1 | null;
-  beloteSeat: number | null;
-  beloteStage: 0 | 1 | 2;
+  belotes: { suit: Suit; seat: number; stage: 0 | 1 | 2 }[];
   scores: [number, number];
   dealNo: number;
   result: { summary: string } | null;
@@ -63,6 +70,7 @@ export function createCoinche(seats: { id: string; nickname: string; isBot?: boo
     turn: 0,
     phase: "bid",
     trump: null,
+    mode: null,
     contract: null,
     taker: null,
     coinche: 0,
@@ -71,8 +79,7 @@ export function createCoinche(seats: { id: string; nickname: string; isBot?: boo
     won: [[], []],
     tricksWon: [0, 0],
     lastTrick: null,
-    beloteSeat: null,
-    beloteStage: 0,
+    belotes: [],
     scores: [0, 0],
     dealNo: 0,
     result: null,
@@ -87,6 +94,7 @@ export function dealCoinche(state: CoincheState, rng: Rng): CoincheState {
   next.turn = (next.dealer + 1) % 4;
   next.phase = "bid";
   next.trump = null;
+  next.mode = null;
   next.contract = null;
   next.taker = null;
   next.coinche = 0;
@@ -95,21 +103,60 @@ export function dealCoinche(state: CoincheState, rng: Rng): CoincheState {
   next.won = [[], []];
   next.tricksWon = [0, 0];
   next.lastTrick = null;
-  next.beloteSeat = null;
-  next.beloteStage = 0;
+  next.belotes = [];
   next.result = null;
   next.dealNo += 1;
   const deck = shuffle(beloteDeck(), rng);
   for (const seat of next.players) seat.hand = [];
   for (let i = 0; i < 32; i += 1) next.players[i % 4]!.hand.push(deck[i]!);
-  push(next, `Donne ${next.dealNo}. Coinche couleur. Enchères à partir de 80.`);
+  push(next, `Donne ${next.dealNo}. Coinche. Enchères à partir de 80, couleur, tout-atout ou sans-atout.`);
   return next;
 }
 
-function higher(value: number, current: number | null): boolean {
-  if (!LADDER.includes(value)) return false;
-  if (current === null) return true;
-  return value > current;
+export function bidStrength(value: number, mode: CoincheMode): number {
+  const rank = mode === "color" ? 0 : mode === "ta" ? 1 : 2;
+  return value * 10 + rank;
+}
+
+function orderFor(mode: CoincheMode, trump: Suit | null, card: Card): number[] {
+  if (mode === "sa") return PLAIN_ORDER;
+  if (mode === "ta" || card.s === trump) return TRUMP_ORDER;
+  return PLAIN_ORDER;
+}
+
+export function coincheCardPoints(card: Card, mode: CoincheMode, trump: Suit | null): number {
+  if (mode === "sa") return PLAIN_POINTS[card.r] ?? 0;
+  if (mode === "ta" || card.s === trump) return TRUMP_POINTS[card.r] ?? 0;
+  return PLAIN_POINTS[card.r] ?? 0;
+}
+
+function stronger(card: Card, other: Card, mode: CoincheMode, trump: Suit | null): boolean {
+  const order = orderFor(mode, trump, card);
+  return order.indexOf(card.r) < order.indexOf(other.r);
+}
+
+export function winningCoinche(trick: readonly TrickPlay[], mode: CoincheMode, trump: Suit | null): number {
+  if (mode === "color" && trump) return winningIndex(trick, trump);
+  const led = trick[0]!.card.s;
+  let best = 0;
+  for (let i = 1; i < trick.length; i += 1) {
+    const card = trick[i]!.card;
+    if (card.s !== led) continue;
+    if (trick[best]!.card.s !== led || stronger(card, trick[best]!.card, mode, trump)) best = i;
+  }
+  return trick[best]!.seat;
+}
+
+export function legalCoinche(hand: readonly Card[], trick: readonly TrickPlay[], mode: CoincheMode, trump: Suit | null, seat: number): Card[] {
+  if (mode === "color" && trump) return legalPlays(hand, trick, trump, seat);
+  if (trick.length === 0) return [...hand];
+  const led = trick[0]!.card.s;
+  const follow = hand.filter((card) => card.s === led);
+  if (follow.length === 0) return [...hand];
+  if (mode === "sa") return follow;
+  const best = trick.filter((play) => play.card.s === led).reduce((top, play) => (stronger(play.card, top, mode, trump) ? play.card : top), trick[0]!.card);
+  const higher = follow.filter((card) => stronger(card, best, mode, trump));
+  return higher.length > 0 ? higher : follow;
 }
 
 export function applyCoinche(state: CoincheState, playerId: string, action: CoincheAction, rng: Rng): CoincheState {
@@ -125,13 +172,18 @@ function bid(state: CoincheState, seat: number, action: CoincheAction, rng: Rng)
   const name = state.players[seat]!.nickname;
   if (action.type === "bid") {
     if (state.coinche > 0) throw new Error("L'enchère est déjà coinchée.");
-    if (!higher(action.value, state.contract)) throw new Error("Il faut surenchérir.");
+    const mode: CoincheMode = action.mode === "ta" || action.mode === "sa" ? action.mode : "color";
+    if (!LADDER.includes(action.value)) throw new Error("Enchère inconnue.");
+    if (mode === "color" && !action.suit) throw new Error("Annoncez une couleur.");
+    const current = state.contract === null || state.mode === null ? null : bidStrength(state.contract, state.mode);
+    if (current !== null && bidStrength(action.value, mode) <= current) throw new Error("Il faut surenchérir.");
     state.contract = action.value;
-    state.trump = action.suit;
+    state.mode = mode;
+    state.trump = mode === "color" ? (action.suit ?? null) : null;
     state.taker = seat;
     state.consecutivePasses = 0;
     state.turn = (seat + 1) % 4;
-    push(state, `${name} annonce ${action.value} à ${suitFr(action.suit)}.`);
+    push(state, `${name} annonce ${action.value} ${contractName(state)}.`);
     return state;
   }
   if (action.type === "coinche") {
@@ -166,18 +218,24 @@ function bid(state: CoincheState, seat: number, action: CoincheAction, rng: Rng)
   if (state.contract !== null && state.coinche === 0 && state.consecutivePasses >= 3) {
     state.phase = "play";
     state.turn = (state.dealer + 1) % 4;
-    push(state, `Contrat ${state.contract} à ${suitFr(state.trump!)}.`);
+    push(state, `Contrat ${state.contract} ${contractName(state)}.`);
     return state;
   }
   state.turn = (seat + 1) % 4;
   return state;
 }
 
+function contractName(state: CoincheState): string {
+  if (state.mode === "sa") return "sans-atout";
+  if (state.mode === "ta") return "tout-atout";
+  return state.trump ? `à ${suitFr(state.trump)}` : "";
+}
+
 function play(state: CoincheState, seat: number, card: Card): CoincheState {
-  const trump = state.trump;
-  if (!trump) throw new Error("Atout manquant.");
+  if (!state.mode) throw new Error("Contrat manquant.");
+  if (state.mode === "color" && !state.trump) throw new Error("Atout manquant.");
   const hand = state.players[seat]!.hand;
-  const legal = legalPlays(hand, state.trick, trump, seat);
+  const legal = legalCoinche(hand, state.trick, state.mode, state.trump, seat);
   if (!legal.some((candidate) => sameCard(candidate, card))) throw new Error("Cette carte n'est pas jouable.");
   const at = hand.findIndex((candidate) => sameCard(candidate, card));
   hand.splice(at, 1);
@@ -188,7 +246,7 @@ function play(state: CoincheState, seat: number, card: Card): CoincheState {
     state.turn = (seat + 1) % 4;
     return state;
   }
-  const win = state.trick[winningIndex(state.trick, trump)]!.seat;
+  const win = winningCoinche(state.trick, state.mode, state.trump);
   const team = (win % 2) as 0 | 1;
   state.won[team].push(...state.trick.map((item) => item.card));
   state.tricksWon[team] += 1;
@@ -200,38 +258,43 @@ function play(state: CoincheState, seat: number, card: Card): CoincheState {
 }
 
 function noteBelote(state: CoincheState, seat: number, card: Card) {
-  if (!state.trump || card.s !== state.trump || (card.r !== 13 && card.r !== 12)) return;
+  if (state.mode === "sa" || (card.r !== 13 && card.r !== 12)) return;
+  if (state.mode === "color" && card.s !== state.trump) return;
+  if (card.s === "t" || card.s === "x") return;
+  const suit = card.s;
   const hand = state.players[seat]!.hand;
-  const hasMate = hand.some((other) => other.s === state.trump && (other.r === 13 || other.r === 12) && other.r !== card.r);
-  if (state.beloteSeat === null && hasMate) {
-    state.beloteSeat = seat;
-    state.beloteStage = 1;
+  const hasMate = hand.some((other) => other.s === suit && (other.r === 13 || other.r === 12) && other.r !== card.r);
+  let mark = state.belotes.find((item) => item.suit === suit && item.seat === seat);
+  if (!mark && hasMate) {
+    mark = { suit, seat, stage: 1 };
+    state.belotes.push(mark);
     push(state, `${state.players[seat]!.nickname} annonce belote.`);
-  } else if (state.beloteSeat === seat && state.beloteStage === 1) {
-    state.beloteStage = 2;
+  } else if (mark && mark.stage === 1) {
+    mark.stage = 2;
     push(state, `${state.players[seat]!.nickname} annonce rebelote.`);
   }
 }
 
-function pointsOf(cards: readonly Card[], trump: Suit, last: boolean, belote: boolean): number {
-  const raw = cards.reduce((sum, card) => sum + cardPoints(card, trump), 0);
-  return raw + (last ? 10 : 0) + (belote ? 20 : 0);
+function pointsOf(cards: readonly Card[], mode: CoincheMode, trump: Suit | null, last: boolean, belote: number): number {
+  const raw = cards.reduce((sum, card) => sum + coincheCardPoints(card, mode, trump), 0);
+  return raw + (last ? 10 : 0) + belote;
 }
 
 function score(state: CoincheState): CoincheState {
-  const trump = state.trump!;
+  const mode = state.mode ?? "color";
   const taker = state.taker!;
   const attack = (taker % 2) as 0 | 1;
   const defense = (1 - attack) as 0 | 1;
-  const beloteTeam = state.beloteStage === 2 && state.beloteSeat !== null ? ((state.beloteSeat % 2) as 0 | 1) : null;
-  const attackPoints = pointsOf(state.won[attack], trump, state.lastTrick === attack, beloteTeam === attack);
+  const beloteFor = (team: 0 | 1) => state.belotes.filter((item) => item.stage === 2 && item.seat % 2 === team).length * 20;
+  const attackPoints = pointsOf(state.won[attack], mode, state.trump, state.lastTrick === attack, beloteFor(attack));
   const capot = state.contract === 250;
   const made = capot ? state.tricksWon[attack] === 8 : attackPoints >= (state.contract ?? 0);
   const mult = state.coinche === 2 ? 4 : state.coinche === 1 ? 2 : 1;
   const stake = (state.contract ?? 0) * mult;
   const receiver = made ? attack : defense;
   state.scores[receiver] += stake;
-  if (beloteTeam !== null) state.scores[beloteTeam] += 20;
+  state.scores[0] += beloteFor(0);
+  state.scores[1] += beloteFor(1);
   const summary = made
     ? `Contrat réussi. ${state.players[taker]!.nickname} marque ${stake}.`
     : `Chute. La défense marque ${stake}.`;
@@ -274,11 +337,14 @@ export function promptsFor(state: CoincheState, seat: number): { label: string; 
   if (state.contract !== null && state.taker !== null && state.taker % 2 !== seat % 2) {
     prompts.push({ label: "Coinche", action: { type: "coinche" } });
   }
-  const floor = state.contract ?? 70;
-  for (const value of LADDER.filter((item) => item > floor)) {
+  const current = state.contract !== null && state.mode ? bidStrength(state.contract, state.mode) : 0;
+  for (const value of LADDER) {
     for (const suit of SUITS) {
+      if (bidStrength(value, "color") <= current) continue;
       prompts.push({ label: `${value} ${suitFr(suit)}`, action: { type: "bid", suit, value } });
     }
+    if (bidStrength(value, "ta") > current) prompts.push({ label: `${value} tout-atout`, action: { type: "bid", value, mode: "ta" } });
+    if (bidStrength(value, "sa") > current) prompts.push({ label: `${value} sans-atout`, action: { type: "bid", value, mode: "sa" } });
   }
   return prompts;
 }
@@ -291,7 +357,7 @@ export function projectCoinche(state: CoincheState, playerId: string) {
   return {
     kind: "coinche" as const,
     phase: state.phase,
-    trumpLabel: trump ? `Atout ${suitFr(trump)} · ${state.contract}${state.coinche === 2 ? " surcoinchée" : state.coinche === 1 ? " coinchée" : ""}` : "Enchères",
+    trumpLabel: state.mode ? `${contractName(state)} · ${state.contract}${state.coinche === 2 ? " surcoinchée" : state.coinche === 1 ? " coinchée" : ""}` : "Enchères",
     scores: `${state.scores[0]} – ${state.scores[1]}`,
     trick: state.trick.map((play) => ({ seat: play.seat, card: { ...play.card } })),
     you: { seat: me, hand: hand.map((card) => ({ ...card })) },
@@ -303,7 +369,7 @@ export function projectCoinche(state: CoincheState, playerId: string) {
       isTurn: index === state.turn && (state.phase === "bid" || state.phase === "play"),
       tags: index === state.taker ? "preneur" : index === state.dealer ? "donneur" : "",
     })),
-    legalCards: state.phase === "play" && state.turn === me && trump ? legalPlays(hand, state.trick, trump, me) : [],
+    legalCards: state.phase === "play" && state.turn === me && state.mode ? legalCoinche(hand, state.trick, state.mode, state.trump, me) : [],
     prompts: promptsFor(state, me),
     result: state.result,
     log: [...state.log],

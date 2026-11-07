@@ -145,8 +145,8 @@ export function Home({
         </button>
       </form>
       <p className="note quiet-note">
-        Poignées et chelem du tarot, sans-atout et tout-atout de la coinche ne sont pas comptés. La bataille se joue en donnes
-        courtes, pas jusqu&apos;à épuisement du paquet.
+        La bataille se joue en donnes courtes, pas jusqu&apos;à épuisement du paquet. Le palmarès reste en mémoire si
+        Postgres n&apos;est pas joignable.
       </p>
     </section>
   );

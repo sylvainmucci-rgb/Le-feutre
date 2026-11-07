@@ -9,7 +9,7 @@ import { CHAT_HISTORY, pushChat, type ChatMessage } from "../shared/chat";
 import { isGameId, type GameId } from "../shared/games";
 import { mulberry32, type Rng } from "../shared/rng";
 import { stakesForBuyIn, type HoldemBuyIn } from "../shared/poker/holdem";
-import { palmaresSnapshot, recordOutcome, winnersFrom } from "./palmares";
+import { bankrollOf, configureStore, palmaresSnapshot, recordEvent, recordOutcome, storeMode, winnersFrom, type BankSeat } from "./palmares";
 
 export type TableView = {
   code: string;
@@ -57,6 +57,7 @@ type Table = {
   continueTimer?: ReturnType<typeof setTimeout>;
   disconnectTimers: Map<string, ReturnType<typeof setTimeout>>;
   scored: boolean;
+  bank: BankSeat[] | null;
 };
 
 type ClientMsg = {
@@ -160,8 +161,40 @@ function noteScore(table: Table) {
   recordOutcome(outcome.winners, outcome.losers);
 }
 
+function syncBankroll(table: Table) {
+  if (!table.engine) return;
+  const next = bankrollOf(table.engine);
+  if (!next) return;
+  const previous = table.bank;
+  table.bank = next;
+  if (!previous) return;
+  for (const seat of next) {
+    const before = previous.find((item) => item.nickname === seat.nickname);
+    if (!before) continue;
+    if (seat.rebuys > before.rebuys) {
+      recordEvent({
+        kind: "rebuy",
+        nickname: seat.nickname,
+        game: table.game,
+        tableCode: table.code,
+        detail: `recave ${seat.rebuys}/3`,
+      });
+    }
+    if (!before.out && seat.out && seat.stack <= 0) {
+      recordEvent({
+        kind: "elimination",
+        nickname: seat.nickname,
+        game: table.game,
+        tableCode: table.code,
+        detail: "tapis fictif épuisé après les recaves",
+      });
+    }
+  }
+}
+
 function emit(table: Table) {
   noteScore(table);
+  syncBankroll(table);
   for (const player of table.players) {
     if (!player.socket) continue;
     try {
@@ -308,6 +341,7 @@ export function createTable(input: {
     continueMs: input.continueMs,
     disconnectTimers: new Map(),
     scored: false,
+    bank: null,
   };
   tables.set(table.code, table);
   return { table, player };
@@ -525,7 +559,15 @@ function serveStatic(req: IncomingMessage, res: ServerResponse, url: URL) {
   fs.createReadStream(file).pipe(res);
 }
 
-export async function startServer(options?: { port?: number; botDelayMs?: number; continueMs?: number; dev?: boolean }) {
+export async function startServer(options?: {
+  port?: number;
+  botDelayMs?: number;
+  continueMs?: number;
+  dev?: boolean;
+  databaseUrl?: string | null;
+}) {
+  const databaseUrl = options?.databaseUrl === undefined ? process.env.DATABASE_URL : options.databaseUrl || undefined;
+  await configureStore(databaseUrl);
   const port = options?.port ?? (Number(process.env.PORT) || 47231);
   const botDelayMs = options?.botDelayMs ?? 700;
   const continueMs = options?.continueMs ?? 8000;
@@ -543,6 +585,11 @@ export async function startServer(options?: { port?: number; botDelayMs?: number
     if (url.pathname === "/health") {
       res.writeHead(200, { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" });
       res.end("ok");
+      return;
+    }
+    if (url.pathname === "/api/health") {
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+      res.end(JSON.stringify({ ok: true, db: storeMode() }));
       return;
     }
     if (url.pathname === "/palmares") {

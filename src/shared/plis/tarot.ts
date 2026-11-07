@@ -13,7 +13,10 @@ import { shuffle, type Rng } from "../rng";
  * On fournit, on coupe, on monte à l'atout. L'excuse se joue toujours, ne gagne pas le pli,
  * et revient à son détenteur sauf si elle est jouée au dernier pli perdu.
  * Bouts : excuse, 21, petit. Seuils 56, 51, 41, 36. Multiples 1, 2, 4, 6.
- * Poignées et chelem ne sont pas comptés dans cette version.
+ * Poignées (simple 20, double 30, triple 40) selon le nombre de joueurs.
+ * L'excuse compte comme un atout pour la poignée. Les points vont au camp qui réalise le contrat,
+ * sans le multiplicateur de l'enchère.
+ * Chelem non annoncé : 200. Annoncé et réussi : 400, le preneur entame. Annoncé et chuté : −200.
  */
 
 const BID_NAME = ["", "prise", "garde", "garde sans", "garde contre"] as const;
@@ -24,7 +27,11 @@ export type TarotAction =
   | { type: "bid"; level: 1 | 2 | 3 | 4 }
   | { type: "call"; suit: Suit }
   | { type: "discard"; cards: Card[] }
+  | { type: "poignee" }
+  | { type: "chelem" }
   | { type: "play"; card: Card };
+
+export type PoigneeLevel = 0 | 1 | 2 | 3;
 
 type Seat = { id: string; nickname: string; hand: Card[]; isBot: boolean; score: number; aside: Card[] };
 
@@ -33,7 +40,7 @@ export type TarotState = {
   players: Seat[];
   dealer: number;
   turn: number;
-  phase: "bid" | "call" | "discard" | "play" | "scoring" | "match-over";
+  phase: "bid" | "call" | "discard" | "announce" | "play" | "scoring" | "match-over";
   chien: Card[];
   bid: number;
   spoken: number;
@@ -43,6 +50,10 @@ export type TarotState = {
   trick: { seat: number; card: Card }[];
   won: Card[][];
   tricks: number;
+  trickWins: number[];
+  poignees: { seat: number; level: 1 | 2 | 3 }[];
+  chelemCall: boolean;
+  announcePasses: number;
   excuse: { player: number; card: Card } | null;
   dealNo: number;
   result: { summary: string } | null;
@@ -99,6 +110,10 @@ export function createTarot(seats: { id: string; nickname: string; isBot?: boole
     trick: [],
     won: seats.map(() => []),
     tricks: 0,
+    trickWins: seats.map(() => 0),
+    poignees: [],
+    chelemCall: false,
+    announcePasses: 0,
     excuse: null,
     dealNo: 0,
     result: null,
@@ -121,6 +136,10 @@ export function dealTarot(state: TarotState, rng: Rng): TarotState {
   next.trick = [];
   next.won = next.players.map(() => []);
   next.tricks = 0;
+  next.trickWins = next.players.map(() => 0);
+  next.poignees = [];
+  next.chelemCall = false;
+  next.announcePasses = 0;
   next.excuse = null;
   next.result = null;
   next.dealNo += 1;
@@ -164,6 +183,36 @@ export function threshold(oudlers: number): number {
   return [56, 51, 41, 36][oudlers] ?? 56;
 }
 
+/** Seuils FFT : atouts (l'excuse compte) pour simple, double et triple. */
+export function poigneeThresholds(players: number): { simple: number; double: number; triple: number } {
+  if (players === 3) return { simple: 13, double: 15, triple: 18 };
+  if (players === 4) return { simple: 10, double: 13, triple: 15 };
+  if (players === 5) return { simple: 8, double: 10, triple: 13 };
+  throw new Error("Le tarot se joue de 3 à 5.");
+}
+
+export const POIGNEE_POINTS = [0, 20, 30, 40] as const;
+
+export function poigneeLevel(trumps: number, players: number): PoigneeLevel {
+  const marks = poigneeThresholds(players);
+  if (trumps >= marks.triple) return 3;
+  if (trumps >= marks.double) return 2;
+  if (trumps >= marks.simple) return 1;
+  return 0;
+}
+
+export function countPoignee(hand: readonly Card[]): number {
+  return hand.filter((card) => card.s === "t" || card.s === "x").length;
+}
+
+/** 400 annoncé réussi, −200 annoncé chuté, 200 non annoncé réussi, 0 sinon. */
+export function chelemBonus(announced: boolean, made: boolean): number {
+  if (announced && made) return 400;
+  if (announced && !made) return -200;
+  if (made) return 200;
+  return 0;
+}
+
 function discardable(hand: readonly Card[], count: number): Card[][] {
   const plain = hand.filter((card) => card.s !== "t" && card.s !== "x" && card.r !== 14 && !isOudler(card));
   const pool = plain.length >= count ? plain : hand.filter((card) => !isOudler(card) && card.r !== 14);
@@ -197,6 +246,7 @@ export function applyTarot(state: TarotState, playerId: string, action: TarotAct
   if (next.phase === "bid") return onBid(next, seat, action, rng);
   if (next.phase === "call" && action.type === "call") return onCall(next, action.suit);
   if (next.phase === "discard" && action.type === "discard") return onDiscard(next, action.cards);
+  if (next.phase === "announce") return onAnnounce(next, seat, action);
   if (next.phase === "play" && action.type === "play") return onPlay(next, seat, action.card);
   throw new Error("Action impossible maintenant.");
 }
@@ -246,10 +296,8 @@ function afterCall(state: TarotState): TarotState {
     const sink = state.bid === 4 ? state.won[state.players.findIndex((_, index) => index !== taker)]! : state.won[taker]!;
     sink.push(...state.chien);
     state.chien = [];
-    state.phase = "play";
-    state.turn = (state.dealer + 1) % state.players.length;
     push(state, state.bid === 4 ? "Le chien va à la défense, sans être montré." : "Le chien va au preneur, sans être montré.");
-    return state;
+    return beginAnnounce(state);
   }
   state.players[taker]!.hand.push(...state.chien.map((card) => ({ ...card })));
   state.phase = "discard";
@@ -274,9 +322,46 @@ function onDiscard(state: TarotState, cards: Card[]): TarotState {
     state.won[taker]!.push(card);
   }
   state.chien = [];
-  state.phase = "play";
-  state.turn = (state.dealer + 1) % state.players.length;
   push(state, "L'écart est fait.");
+  return beginAnnounce(state);
+}
+
+function beginAnnounce(state: TarotState): TarotState {
+  state.phase = "announce";
+  state.turn = (state.dealer + 1) % state.players.length;
+  state.announcePasses = 0;
+  return state;
+}
+
+const POIGNEE_NAME = ["", "simple", "double", "triple"] as const;
+
+function onAnnounce(state: TarotState, seat: number, action: TarotAction): TarotState {
+  const name = state.players[seat]!.nickname;
+  if (action.type === "poignee") {
+    if (state.poignees.some((item) => item.seat === seat)) throw new Error("Poignée déjà annoncée.");
+    const level = poigneeLevel(countPoignee(state.players[seat]!.hand), state.players.length);
+    if (level === 0) throw new Error("Pas assez d'atouts pour une poignée.");
+    state.poignees.push({ seat, level });
+    push(state, `${name} annonce une poignée ${POIGNEE_NAME[level]}.`);
+    return state;
+  }
+  if (action.type === "chelem") {
+    if (seat !== state.taker) throw new Error("Seul le preneur annonce le chelem.");
+    if (state.chelemCall) throw new Error("Le chelem est déjà annoncé.");
+    state.chelemCall = true;
+    push(state, `${name} annonce le chelem.`);
+    return state;
+  }
+  if (action.type !== "pass") throw new Error("Annonce impossible.");
+  state.announcePasses += 1;
+  push(state, `${name} ne montre rien.`);
+  if (state.announcePasses < state.players.length) {
+    state.turn = (seat + 1) % state.players.length;
+    return state;
+  }
+  state.phase = "play";
+  state.turn = state.chelemCall ? state.taker! : (state.dealer + 1) % state.players.length;
+  if (state.chelemCall) push(state, "Le preneur entame.");
   return state;
 }
 
@@ -316,13 +401,24 @@ function onPlay(state: TarotState, seat: number, card: Card): TarotState {
   }
   state.trick = [];
   state.tricks += 1;
+  state.trickWins[win] = (state.trickWins[win] ?? 0) + 1;
   state.turn = win;
   if (!last) return state;
   if (state.excuse) state.won[state.excuse.player]!.push(state.excuse.card);
-  return settle(state);
+  return scoreTarotDeal(state);
 }
 
-function settle(state: TarotState): TarotState {
+function grant(state: TarotState, toAttack: boolean, unit: number) {
+  const taker = state.taker!;
+  const partner = state.partner !== null && state.partner !== taker ? state.partner : null;
+  const defenders = state.players.map((_, index) => index).filter((index) => index !== taker && index !== partner);
+  const sign = toAttack ? 1 : -1;
+  state.players[taker]!.score += sign * unit * (partner === null ? defenders.length : 2);
+  if (partner !== null) state.players[partner]!.score += sign * unit;
+  for (const index of defenders) state.players[index]!.score -= sign * unit;
+}
+
+export function scoreTarotDeal(state: TarotState): TarotState {
   const taker = state.taker!;
   const side = [taker, ...(state.partner !== null && state.partner !== taker ? [state.partner] : [])];
   const attack = state.won.flatMap((cards, index) => (side.includes(index) ? cards : []));
@@ -332,17 +428,20 @@ function settle(state: TarotState): TarotState {
   const made = half >= need;
   const base = 25 + Math.abs(half - need) / 2;
   const amount = base * MULTIPLE[state.bid]!;
-  const defenders = state.players.map((_, index) => index).filter((index) => !side.includes(index));
-  if (made) {
-    state.players[taker]!.score += amount * (state.partner === null || state.partner === taker ? defenders.length : 2);
-    if (state.partner !== null && state.partner !== taker) state.players[state.partner]!.score += amount;
-    for (const index of defenders) state.players[index]!.score -= amount;
-  } else {
-    state.players[taker]!.score -= amount * (state.partner === null || state.partner === taker ? defenders.length : 2);
-    if (state.partner !== null && state.partner !== taker) state.players[state.partner]!.score -= amount;
-    for (const index of defenders) state.players[index]!.score += amount;
-  }
-  const summary = `${made ? "Contrat réussi" : "Chute"} (${BID_NAME[state.bid]}, ${bouts} bout${bouts > 1 ? "s" : ""}, ${half / 2} points). ${amount} points.`;
+  grant(state, made, amount);
+  const poignee = state.poignees.reduce((sum, item) => sum + POIGNEE_POINTS[item.level], 0);
+  if (poignee > 0) grant(state, made, poignee);
+  const attackTricks = side.reduce((sum, index) => sum + (state.trickWins[index] ?? 0), 0);
+  const totalTricks = state.trickWins.reduce((sum, count) => sum + count, 0);
+  const attackSlam = totalTricks > 0 && attackTricks === totalTricks;
+  const defenseSlam = totalTricks > 0 && attackTricks === 0;
+  const slam = state.chelemCall ? chelemBonus(true, attackSlam) : attackSlam || defenseSlam ? 200 : 0;
+  if (slam !== 0) grant(state, state.chelemCall || attackSlam, slam);
+  const extras = [
+    poignee > 0 ? `poignée ${poignee}` : "",
+    slam !== 0 ? `chelem ${slam}` : "",
+  ].filter(Boolean);
+  const summary = `${made ? "Contrat réussi" : "Chute"} (${BID_NAME[state.bid]}, ${bouts} bout${bouts > 1 ? "s" : ""}, ${half / 2} points). ${amount} points${extras.length ? `, ${extras.join(", ")}` : ""}.`;
   state.result = { summary };
   state.phase = state.players.some((seat) => seat.score >= 100) ? "match-over" : "scoring";
   push(state, summary);
@@ -394,6 +493,14 @@ export function projectTarot(state: TarotState, playerId: string) {
       if (level > state.bid) prompts.push({ label: BID_NAME[level]!, action: { type: "bid", level } });
     }
   }
+  if (state.phase === "announce" && state.turn === me) {
+    prompts.push({ label: "Je ne montre rien", action: { type: "pass" } });
+    const level = poigneeLevel(countPoignee(hand), state.players.length);
+    if (level > 0 && !state.poignees.some((item) => item.seat === me)) {
+      prompts.push({ label: `Poignée ${POIGNEE_NAME[level]}`, action: { type: "poignee" } });
+    }
+    if (me === state.taker && !state.chelemCall) prompts.push({ label: "Chelem", action: { type: "chelem" } });
+  }
   if (state.phase === "call" && state.turn === me) {
     for (const suit of SUITS) {
       if (!hand.some((card) => card.s === suit && card.r === 14)) {
@@ -428,6 +535,7 @@ export function projectTarot(state: TarotState, playerId: string) {
 }
 
 export function chooseTarot(view: ReturnType<typeof projectTarot>): TarotAction {
+  if (view.phase === "announce") return { type: "pass" };
   if (view.phase === "bid") {
     const oudlers = view.you.hand.filter(isOudler).length;
     const trumps = view.you.hand.filter((card) => card.s === "t" || card.s === "x").length;

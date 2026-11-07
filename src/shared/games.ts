@@ -61,7 +61,7 @@ export const PLAYABLE_GAMES = [
     min: 4,
     max: 4,
     stack: false,
-    summary: "Enchères de 80 à 160, capot, coinche et surcoinche. Couleur seulement.",
+    summary: "Couleur, tout-atout et sans-atout. Enchères, coinche et surcoinche.",
   },
   {
     id: "tarot",
@@ -71,7 +71,7 @@ export const PLAYABLE_GAMES = [
     min: 3,
     max: 5,
     stack: false,
-    summary: "Prise, garde, garde sans, garde contre. Chien, bouts, excuse. À cinq, appel au roi.",
+    summary: "Prise, garde, sans, contre. Poignées, chelem, chien, bouts. À cinq, appel au roi.",
   },
   {
     id: "manille",
