@@ -1,0 +1,16 @@
+# Service web Render, offre gratuite, région Francfort.
+# Render injecte PORT. Le serveur écoute sur 0.0.0.0 et accepte les WebSockets
+# sur le même service (chemin /ws), avec ping/pong.
+# Ce fichier ne déclenche pas un déploiement à lui seul.
+services:
+  - type: web
+    name: le-feutre
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production

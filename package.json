@@ -1,0 +1,31 @@
+{
+  "name": "le-feutre",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "NODE_ENV=development tsx src/server/main.ts",
+    "build": "node scripts/make-icons.mjs && vite build",
+    "start": "NODE_ENV=production tsx src/server/main.ts",
+    "test": "tsx --test --test-force-exit tests/poker-evaluate.test.ts tests/poker-pots.test.ts tests/belote.test.ts tests/visibility-chat.test.ts",
+    "typecheck": "tsc --noEmit",
+    "icons": "node scripts/make-icons.mjs"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsx": "^4.20.3",
+    "ws": "^8.18.2"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^4.4.1",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
+  }
+}
