@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cardFr, cardKey, suitFr, suitGlyph, SUITS, type Card, type Face, type Suit } from "../shared/cards";
 import { Avatar } from "./avatar";
 import { PlayingCard } from "./cards";
@@ -32,7 +32,7 @@ function BeloteSeat({ seat, index }: { seat: BeloteView["seats"][number]; index:
       )}
       <div className="plate">
         <Trinket id={person?.trinket} />
-        <Avatar name={seat.nickname} reaction={person?.reaction} />
+        <Avatar name={seat.nickname} reaction={person?.reaction} timing={seat.isTurn} />
         <strong>{seat.nickname}</strong>
         <span>
           {seat.cards} cartes {seat.isDealer ? "· donneur" : ""} {seat.isTaker ? "· preneur" : ""}
@@ -57,7 +57,9 @@ export function BeloteTable({ view, send }: { view: BeloteView; send: (payload: 
   const order = [0, 1, 2, 3].map((step) => view.seats[(mine + step) % 4]!);
   const legalKey = new Set(view.legalCards.map((card) => cardKey(card)));
   const yourTurn = view.turnSeat === mine;
-  const hand = sortHand(view.you.hand, view.trump);
+  const [played, setPlayed] = useState("");
+  const hand = sortHand(view.you.hand, view.trump).filter((card) => cardKey(card) !== played);
+  useEffect(() => setPlayed(""), [view.you.hand, view.trick.length]);
   return (
     <section className="play belote-play" aria-label="Table de belote">
       <div className="felt-head">
@@ -136,7 +138,7 @@ export function BeloteTable({ view, send }: { view: BeloteView; send: (payload: 
                   card={card}
                   dimmed={view.phase === "play" && !playable}
                   disabled={!playable}
-                  onClick={playable ? () => send({ t: "action", action: { type: "play", card } }) : undefined}
+                  onClick={playable ? () => { setPlayed(key); send({ t: "action", action: { type: "play", card } }); } : undefined}
                 />
               </span>
             );

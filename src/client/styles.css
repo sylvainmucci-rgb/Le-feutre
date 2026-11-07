@@ -445,12 +445,51 @@ button.playing-card:disabled { cursor: default; }
 .fan[data-count="8"] .shell:nth-child(8){transform:rotate(16deg) translateY(8px);z-index:8;}
 
 @keyframes rise {
-  from { opacity: 0; transform: translateY(14px) scale(0.96); }
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
   to { opacity: 1; transform: none; }
 }
 @keyframes pop {
-  from { opacity: 0; transform: translate(-50%, -40%) scale(0.7); }
+  from { opacity: 0; transform: translate(-50%, -40%) scale(0.8); }
   to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+.playing-card, .bet { animation-duration: 0.28s; }
+.bet.scoop { animation: scoop 0.28s ease forwards; }
+@keyframes scoop {
+  to { transform: translate(-50%, -120%) scale(0.55); opacity: 0; }
+}
+.action-dock, .pre-actions {
+  display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center;
+  position: sticky; bottom: 0; z-index: 8; margin-top: 0.4rem;
+  background: rgba(36, 20, 12, 0.94); border: 1px solid rgba(230, 201, 138, 0.35);
+  border-radius: 18px; padding: 0.45rem;
+}
+.pre-actions label { display: flex; gap: 0.35rem; align-items: center; margin: 0; }
+.quick { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+.quick button { min-height: 44px; border-radius: 999px; border: 1px solid rgba(246,241,230,0.3); background: transparent; color: var(--cream); padding: 0.2rem 0.55rem; }
+.action-dock .btn-brass, .action-dock .btn-ghost, .pre-actions label { min-height: 44px; }
+.plaque { font-size: 1.2rem; font-weight: 750; }
+.hero-plate span { font-size: 1rem; color: #fff6df; }
+@property --turn {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 360deg;
+}
+.avatar.timing::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 50%;
+  background: conic-gradient(#e6c98a var(--turn), rgba(166, 31, 31, 0.35) 0);
+  animation: timer 12s linear forwards;
+  mask: radial-gradient(circle, transparent 64%, #000 66%);
+  pointer-events: none;
+}
+@keyframes timer { to { --turn: 0deg; } }
+.playing-card.dim { opacity: 0.34; filter: grayscale(0.9) drop-shadow(0 4px 6px rgba(0,0,0,0.2)); }
+@media (max-width: 720px) {
+  .action-dock, .pre-actions { position: fixed; left: 0; right: 0; bottom: 0; border-radius: 16px 16px 0 0; }
+  .play { padding-bottom: 9.5rem; }
+  .ambiance { bottom: 8.2rem; }
 }
 @keyframes glow {
   50% { box-shadow: 0 0 0 2px #f0d7a2, 0 0 18px rgba(240, 215, 162, 0.55); }

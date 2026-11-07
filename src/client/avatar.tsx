@@ -6,10 +6,10 @@ export function toneFor(name: string): (typeof TONES)[number] {
   return TONES[hash % TONES.length]!;
 }
 
-export function Avatar({ name, reaction }: { name: string; reaction?: string }) {
+export function Avatar({ name, reaction, timing = false }: { name: string; reaction?: string; timing?: boolean }) {
   const letter = [...name.trim()][0]?.toUpperCase() || "?";
   return (
-    <span className={`avatar face tone-${toneFor(name)}`}>
+    <span className={`avatar face tone-${toneFor(name)} ${timing ? "timing" : ""}`}>
       <span className="eyes" aria-hidden="true" />
       <span className="smile" aria-hidden="true" />
       <span className="initial">{letter}</span>

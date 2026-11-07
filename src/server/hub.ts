@@ -275,6 +275,7 @@ function schedule(table: Table) {
   if (!id) return;
   const player = table.players.find((seat) => seat.id === id);
   if (!player || (player.connected && !player.isBot)) return;
+  const delay = table.botDelayMs > 2_000 ? table.botDelayMs : 500 + Math.floor(Math.random() * 1_001);
   table.botTimer = setTimeout(() => {
     table.botTimer = undefined;
     try {
@@ -292,7 +293,7 @@ function schedule(table: Table) {
     }
     emit(table);
     schedule(table);
-  }, table.botDelayMs);
+  }, delay);
 }
 
 function advance(table: Table, reset: boolean) {
@@ -592,8 +593,8 @@ export async function startServer(options?: {
   const databaseUrl = options?.databaseUrl === undefined ? process.env.DATABASE_URL : options.databaseUrl || undefined;
   await configureStore(databaseUrl);
   const port = options?.port ?? (Number(process.env.PORT) || 47231);
-  const botDelayMs = options?.botDelayMs ?? 700;
-  const continueMs = options?.continueMs ?? 8000;
+  const botDelayMs = options?.botDelayMs ?? 800;
+  const continueMs = options?.continueMs ?? 1_600;
   let vite: { close: () => Promise<void>; middlewares: (req: IncomingMessage, res: ServerResponse, next: () => void) => void } | null =
     null;
   if (options?.dev) {

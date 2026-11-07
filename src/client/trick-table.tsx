@@ -20,7 +20,7 @@ function TrickSeat({ seat, index }: { seat: TrickScene["seats"][number]; index: 
       )}
       <div className="plate">
         <Trinket id={person?.trinket} />
-        <Avatar name={seat.nickname} reaction={person?.reaction} />
+        <Avatar name={seat.nickname} reaction={person?.reaction} timing={seat.isTurn} />
         <strong>{seat.nickname}</strong>
         <span>
           {seat.cards} cartes {seat.tags}
@@ -33,6 +33,7 @@ function TrickSeat({ seat, index }: { seat: TrickScene["seats"][number]; index: 
 export function TrickTable({ view, send }: { view: TrickScene; send: (payload: object) => void }) {
   const seen = useRef<{ trick: number; result: string } | null>(null);
   const [picked, setPicked] = useState<Card[]>([]);
+  const [played, setPlayed] = useState("");
   useEffect(() => {
     const snap = { trick: view.trick.length, result: view.result?.summary ?? "" };
     const before = seen.current;
@@ -48,6 +49,7 @@ export function TrickTable({ view, send }: { view: TrickScene; send: (payload: o
   const naming = view.naming ?? "poker";
   const discarding = Boolean(view.discard) || (view.discardCount ?? 0) > 0;
   const yourTurn = view.seats[mine]?.isTurn;
+  useEffect(() => setPlayed(""), [view.you.hand, view.trick.length]);
   return (
     <section className="play" aria-label={gameById(view.kind as GameId).name}>
       <div className="felt-head">
@@ -111,7 +113,7 @@ export function TrickTable({ view, send }: { view: TrickScene; send: (payload: o
         </div>
       ) : null}
       <div className="fan" data-count={Math.min(8, view.you.hand.length)}>
-        {view.you.hand.map((card) => {
+        {view.you.hand.filter((card) => cardKey(card) !== played).map((card) => {
           const key = cardKey(card);
           const playable = !discarding && yourTurn && legal.has(key);
           const marked = picked.some((item) => cardKey(item) === key);
@@ -123,11 +125,13 @@ export function TrickTable({ view, send }: { view: TrickScene; send: (payload: o
                 dimmed={(!playable && !discarding && view.legalCards.length > 0) || marked}
                 onClick={
                   playable
-                    ? () =>
+                    ? () => {
+                        setPlayed(key);
                         send({
                           t: "action",
                           action: view.kind === "ecarte" ? { type: "play-card", card } : { type: "play", card },
-                        })
+                        });
+                      }
                     : discarding && yourTurn
                       ? () =>
                           setPicked((current) =>

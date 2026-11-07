@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Card } from "../shared/cards";
 import { formatDollars } from "../shared/poker/holdem";
+import { clampRaise, sizedRaise } from "./bet-size";
 import { Avatar } from "./avatar";
 import { Trinket, usePerson } from "./look";
 import { PlayingCard } from "./cards";
@@ -19,6 +20,12 @@ const STREETS: Record<string, string> = {
 export function PokerTable({ view, send, youId }: { view: PokerView; send: (payload: object) => void; youId: string }) {
   const [amount, setAmount] = useState(view.you.legal?.raise?.minTo ?? view.bb);
   const [discard, setDiscard] = useState<Card[]>([]);
+  const [pending, setPending] = useState("");
+  const [pre, setPre] = useState<"none" | "checkfold" | "callany">("none");
+  const [scoop, setScoop] = useState<{ id: string; cents: number }[]>([]);
+  const bets = useRef<Record<string, number>>({});
+  const preFired = useRef(false);
+  const turnKey = useRef("");
   const seen = useRef<{ pot: number; board: number; hand: number; result: string } | null>(null);
   const minRaise = view.you.legal?.raise?.minTo;
   const resultLine = view.result?.summary ?? "";
@@ -39,6 +46,24 @@ export function PokerTable({ view, send, youId }: { view: PokerView; send: (payl
     else if (snap.hand !== before.hand || snap.board > before.board) playSound("deal");
     else if (snap.pot !== before.pot) playSound("chip");
   }, [view.pot, view.board.length, view.handNo, resultLine]);
+  useEffect(() => {
+    const previous = bets.current;
+    const flying: { id: string; cents: number }[] = [];
+    for (const seat of view.seats) {
+      const before = previous[seat.id] ?? 0;
+      if (before > 0 && seat.streetBet === 0) flying.push({ id: seat.id, cents: before });
+      previous[seat.id] = seat.streetBet;
+    }
+    if (flying.length === 0) return;
+    setScoop(flying);
+    const timer = window.setTimeout(() => setScoop([]), 280);
+    return () => window.clearTimeout(timer);
+  }, [view.seats]);
+  function act(action: object, label: string) {
+    setPending(label);
+    setPre("none");
+    send({ t: "action", action });
+  }
 
   const hero = view.seats.findIndex((seat) => seat.id === youId);
   const ordered = useMemo(() => {
@@ -48,6 +73,32 @@ export function PokerTable({ view, send, youId }: { view: PokerView; send: (payl
   const legal = view.you.legal;
   const winners = new Set(view.result?.awards?.map((award) => award.playerId) ?? []);
   const you = ordered[0];
+  const heroPerson = usePerson(youId);
+  const streetBet = you?.streetBet ?? 0;
+  const myTurn = view.toActId === youId && Boolean(legal);
+  const turn = `${view.toActId}|${view.handNo}|${view.street}`;
+  useEffect(() => {
+    if (turnKey.current !== turn) {
+      turnKey.current = turn;
+      preFired.current = false;
+      setPending("");
+    }
+    if (!myTurn || !legal || preFired.current) return;
+    if (pre === "checkfold") {
+      preFired.current = true;
+      if (legal.check) act({ type: "check" }, "Checker");
+      else if (legal.fold) act({ type: "fold" }, "Couché");
+    } else if (pre === "callany" && legal.call !== null) {
+      preFired.current = true;
+      act({ type: "call" }, `Suivre ${formatDollars(legal.call)}`);
+    }
+  }, [turn, myTurn, legal, pre]);
+  function jump(fraction: number | "min" | "all") {
+    if (!legal?.raise) return;
+    if (fraction === "min") setAmount(legal.raise.minTo);
+    else if (fraction === "all") setAmount(legal.raise.maxTo);
+    else setAmount(sizedRaise({ pot: view.pot, toCall: view.you.toCall, streetBet, minTo: legal.raise.minTo, maxTo: legal.raise.maxTo, fraction }));
+  }
   return (
     <section className="play" aria-label="Table de Hold'em">
       <div className="felt-head">
@@ -87,14 +138,23 @@ export function PokerTable({ view, send, youId }: { view: PokerView; send: (payl
                   </div>
                 ) : null,
               )}
+              {scoop.map((chip) => {
+                const index = ordered.findIndex((seat) => seat.id === chip.id);
+                if (index < 0) return null;
+                return (
+                  <div key={`scoop-${chip.id}-${chip.cents}`} className={`bet scoop bet-i${index}`}>
+                    <ChipStack cents={chip.cents} />
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
       </div>
       <div className="hero-dock">
         <div className={`plate hero-plate ${view.toActId === youId ? "turn" : ""} ${you?.folded ? "folded" : ""}`}>
-          <Avatar name={you?.nickname || "Vous"} reaction={usePerson(youId)?.reaction} />
-          <Trinket id={usePerson(youId)?.trinket} />
+          <Avatar name={you?.nickname || "Vous"} reaction={heroPerson?.reaction} timing={view.toActId === youId} />
+          <Trinket id={heroPerson?.trinket} />
           <div>
             <strong>{you?.nickname ?? "Vous"}</strong>
             <span>Tapis fictif {formatDollars(view.you.stack)}</span>
@@ -132,7 +192,7 @@ export function PokerTable({ view, send, youId }: { view: PokerView; send: (payl
           )}
         </div>
         <p className="turn-live" aria-live="polite">
-          {view.toActId === youId ? "C'est à vous." : "En attente d'un autre joueur."}
+          {pending ? pending : view.toActId === youId ? "C'est à vous." : "En attente d'un autre joueur."}
         </p>
       </div>
       {view.result ? (
@@ -154,43 +214,70 @@ export function PokerTable({ view, send, youId }: { view: PokerView; send: (payl
           </button>
         </div>
       ) : null}
+      {view.phase === "betting" && !myTurn ? (
+        <div className="pre-actions">
+          <label>
+            <input type="checkbox" checked={pre === "checkfold"} onChange={() => setPre(pre === "checkfold" ? "none" : "checkfold")} />
+            Check/Fold auto
+          </label>
+          <label>
+            <input type="checkbox" checked={pre === "callany"} onChange={() => setPre(pre === "callany" ? "none" : "callany")} />
+            Suivre tout
+          </label>
+        </div>
+      ) : null}
       {legal ? (
-        <div className="actions">
+        <div className="action-dock">
           {legal.fold ? (
-            <button type="button" className="btn-ghost" onClick={() => send({ t: "action", action: { type: "fold" } })}>
+            <button type="button" className="btn-ghost" disabled={Boolean(pending)} onClick={() => act({ type: "fold" }, "Couché")}>
               Se coucher
             </button>
-          ) : null}
+          ) : (
+            <span />
+          )}
           {legal.check ? (
-            <button type="button" className="btn-brass" onClick={() => send({ t: "action", action: { type: "check" } })}>
-              Parole
+            <button type="button" className="btn-brass" disabled={Boolean(pending)} onClick={() => act({ type: "check" }, "Checker")}>
+              Checker
             </button>
-          ) : null}
-          {legal.call !== null ? (
-            <button type="button" className="btn-brass" onClick={() => send({ t: "action", action: { type: "call" } })}>
-              Suivre {formatDollars(legal.call)}
+          ) : legal.call !== null ? (
+            <button type="button" className="btn-brass" disabled={Boolean(pending)} onClick={() => act({ type: "call" }, `Suivre ${formatDollars(legal.call ?? 0)}`)}>
+              Suivre {formatDollars(legal.call ?? 0)}
             </button>
-          ) : null}
+          ) : (
+            <span />
+          )}
           {legal.raise ? (
             <div className="raise">
+              <div className="quick">
+                <button type="button" onClick={() => jump("min")}>Min</button>
+                <button type="button" onClick={() => jump(1 / 2)}>1/2</button>
+                <button type="button" onClick={() => jump(3 / 4)}>3/4</button>
+                <button type="button" onClick={() => jump(1)}>Pot</button>
+                <button type="button" onClick={() => jump("all")}>Tapis</button>
+              </div>
               <label htmlFor="bet">
-                {view.you.toCall > 0 ? "Relance à" : "Mise"} {formatDollars(amount)}
+                {view.you.toCall > 0 ? "Relance" : "Mise"} {formatDollars(clampRaise(amount, legal.raise.minTo, legal.raise.maxTo))}
               </label>
               <input
                 id="bet"
                 type="range"
                 min={legal.raise.minTo}
                 max={legal.raise.maxTo}
-                value={amount}
+                value={clampRaise(amount, legal.raise.minTo, legal.raise.maxTo)}
                 onChange={(event) => setAmount(Number(event.target.value))}
               />
-              <button type="button" className="btn-brass" onClick={() => send({ t: "action", action: { type: "bet", amount } })}>
-                {legal.raise.short ? `Tapis ${formatDollars(amount)}` : `${view.you.toCall > 0 ? "Relancer à" : "Miser"} ${formatDollars(amount)}`}
+              <button
+                type="button"
+                className="btn-brass"
+                disabled={Boolean(pending)}
+                onClick={() => act({ type: "bet", amount: clampRaise(amount, legal.raise!.minTo, legal.raise!.maxTo) }, legal.raise!.short ? "Tapis" : "Relance")}
+              >
+                {legal.raise.short ? `Tapis ${formatDollars(legal.raise.maxTo)}` : view.you.toCall > 0 ? "Relancer" : "Miser"}
               </button>
             </div>
           ) : null}
         </div>
-      ) : view.phase !== "betting" ? (
+      ) : view.phase !== "betting" && view.phase !== "draw" ? (
         <button type="button" className="btn-brass" onClick={() => send({ t: "continue" })}>
           {view.phase === "match-over" ? "Rejouer" : "Donne suivante"}
         </button>
@@ -216,7 +303,7 @@ function SeatPlate({ seat, index, win }: { seat: PokerSeat; index: number; win: 
       </div>
       <div className="plate">
         <Trinket id={person?.trinket} />
-        <Avatar name={seat.nickname} reaction={person?.reaction} />
+        <Avatar name={seat.nickname} reaction={person?.reaction} timing={seat.isTurn} />
         <strong>{seat.nickname}</strong>
         <span>{formatDollars(seat.stack)}</span>
         <span className="tags">
